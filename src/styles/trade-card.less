@@ -1,0 +1,191 @@
+@import 'variables.less';
+@import 'mixins.less';
+
+// Trade Card Styles
+.trade-card {
+    .card-base();
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+
+    // Different accent colors based on performance
+    &--profit {
+        .accent-card(@color-success, @color-success-bg, @color-success-border);
+    }
+
+    &--loss {
+        .accent-card(@color-danger, @color-danger-bg, @color-danger-border);
+    }
+
+    &--neutral {
+        .blue-accent-card();
+    }
+
+    &--major-profit {
+        .accent-card(@color-orange, @color-orange-bg, @color-orange-border);
+    }
+
+    &--major-loss {
+        .accent-card(@color-rose, @color-rose-bg, @color-rose-border);
+    }
+
+    &__header {
+        .flex-between();
+        margin-bottom: @spacing-md;
+
+        .asset-info {
+            display: flex;
+            align-items: center;
+            gap: @spacing-sm;
+
+            .status-dot {
+                width: 10px;
+                height: 10px;
+                border-radius: 50%;
+
+                &--profit {
+                    background: @color-success;
+                }
+
+                &--loss {
+                    background: @color-danger;
+                }
+            }
+
+            .asset-name {
+                font-weight: 700;
+                font-size: 18px;
+                color: @text-primary;
+            }
+
+            .date {
+                font-size: 12px;
+                color: @text-muted;
+                margin-left: @spacing-md;
+            }
+        }
+
+        .price-change {
+            font-size: 18px;
+            font-weight: 600;
+
+            &--profit {
+                color: @color-success;
+            }
+
+            &--loss {
+                color: @color-danger;
+            }
+        }
+    }
+
+    &__content {
+        .price-section {
+            .flex-between();
+            background: rgba(255, 255, 255, 0.05);
+            padding: @spacing-sm;
+            border-radius: @radius-sm;
+            margin-bottom: @spacing-md;
+
+            .price-item {
+                text-align: center;
+
+                .label {
+                    font-size: 12px;
+                    color: @text-muted;
+                    margin-bottom: @spacing-xs;
+                }
+
+                .value {
+                    font-family: monospace;
+                    font-size: 16px;
+                    color: @text-primary;
+                }
+            }
+
+            .arrow {
+                color: @text-muted;
+                font-size: 20px;
+            }
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: @spacing-md;
+            margin-bottom: @spacing-md;
+
+            .stat-item {
+                background: rgba(255, 255, 255, 0.05);
+                padding: @spacing-sm;
+                border-radius: @radius-sm;
+
+                .label {
+                    font-size: 12px;
+                    color: @text-muted;
+                    margin-bottom: @spacing-xs;
+                }
+
+                .value {
+                    font-family: monospace;
+                    font-size: 16px;
+                    color: @text-primary;
+                }
+            }
+        }
+
+        .pnl-section {
+            padding-top: @spacing-sm;
+
+            .pnl-header {
+                .flex-between();
+                margin-bottom: @spacing-xs;
+
+                .label {
+                    font-size: 14px;
+                    color: @text-secondary;
+                }
+
+                .value {
+                    font-family: monospace;
+                    font-size: 18px;
+                    font-weight: 700;
+
+                    &--profit {
+                        color: @color-success;
+                    }
+
+                    &--loss {
+                        color: @color-danger;
+                    }
+                }
+            }
+
+            .progress-bar {
+                width: 100%;
+                height: 6px;
+                background: rgba(107, 114, 128, 0.5);
+                border-radius: 3px;
+                overflow: hidden;
+
+                .progress-fill {
+                    height: 100%;
+                    border-radius: 3px;
+                    transition: width 1s ease;
+
+                    &--profit {
+                        background: @color-success;
+                    }
+
+                    &--loss {
+                        background: @color-danger;
+                    }
+                }
+            }
+        }
+    }
+
+    &:hover {
+        transform: translateY(-4px) scale(1.02);
+    }
+}

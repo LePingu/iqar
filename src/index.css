@@ -1,0 +1,58 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700&family=Roboto+Mono:wght@400;500&display=swap');
+
+@theme {
+  --color-gold-accent: #E0B670;
+  --color-gold-dim: #C39F61;
+  --color-gold-light: #F4D399;
+  --color-dark-bg: #121212;
+  --color-dark-panel: #1A1A1A;
+  --color-dark-border: rgba(224, 182, 112, 0.15); /* Subtle gold border */
+
+  --font-sans: 'Inter', sans-serif;
+  --font-display: 'Outfit', sans-serif;
+  --font-mono: 'Roboto Mono', monospace;
+}
+
+@layer base {
+  body {
+    @apply bg-[var(--color-dark-bg)] text-gray-200 font-sans antialiased min-h-screen;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display font-semibold;
+  }
+}
+
+@layer components {
+  .glass-panel {
+    @apply bg-gradient-to-br from-[var(--color-dark-panel)] to-[#141414] border border-[var(--color-dark-border)] shadow-2xl rounded-3xl p-6;
+  }
+  
+  .text-gold {
+    @apply text-[var(--color-gold-accent)];
+  }
+  
+  .btn-gold {
+    @apply bg-gradient-to-r from-[var(--color-gold-dim)] to-[var(--color-gold-accent)] text-[#121212] font-bold py-3 px-8 rounded-full hover:opacity-90 transform hover:-translate-y-0.5 transition-all shadow-lg shadow-[var(--color-gold-dim)]/20 uppercase tracking-wide text-sm;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-dark-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-dark-panel);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-gold-dim);
+}

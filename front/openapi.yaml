@@ -1,0 +1,1030 @@
+openapi: 3.0.3
+info:
+  title: Trader-Strat API
+  version: 1.0.0
+  description: |
+    API specification for the Trader-Strat Control Tower.
+    Provides REST endpoints for backtest management and system control, 
+    plus WebSocket documentation for live trading streams.
+
+tags:
+  - name: System
+    description: System status and configuration
+  - name: Backtest
+    description: Backtest execution and historical review
+  - name: Engine
+    description: Live trading engine control (halt / resume / risk limits)
+
+paths:
+  /api/system/status:
+    get:
+      tags:
+        - System
+      summary: Get system health and component status
+      responses:
+        '200':
+          description: System status details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemStatus'
+
+  /api/system/config:
+    get:
+      tags:
+        - System
+      summary: Get active global configuration
+      responses:
+        '200':
+          description: Global configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BacktestConfig'
+
+  /api/backtests:
+    get:
+      tags:
+        - Backtest
+      summary: List historical backtest runs
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: A list of backtest summaries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BacktestSummary'
+    post:
+      tags:
+        - Backtest
+      summary: Launch a new backtest
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BacktestConfig'
+      responses:
+        '202':
+          description: Backtest job accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  job_id:
+                    type: string
+                  status:
+                    type: string
+
+  /api/backtests/jobs/{job_id}:
+    get:
+      tags:
+        - Backtest
+      summary: Poll progress of a running or completed backtest job
+      description: |
+        Reads from SQLite `portfolio_snapshots`. job_id == run_id (no separate job manager yet).
+        Returns 404 when the run has no DB data (i.e. it was never started or predates the DB).
+        `progress_pct` = snap_count / target_decisions × 100 (0–100).
+        Use `GET /api/backtests/live/{run_id}` for richer live data (positions, fills, equity curve).
+      parameters:
+        - in: path
+          name: job_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Job status and progress
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BacktestJobStatus'
+        '404':
+          description: Run not found in database
+
+  /api/backtests/live:
+    get:
+      tags:
+        - Backtest
+      summary: Detect the currently active run and return its live state
+      description: |
+        A run is "active" if it wrote a `portfolio_snapshots` row within the last 60 seconds.
+        Returns 404 when no run is currently active.
+        Poll this endpoint on the Live Run Monitor page to auto-attach to whatever run just started
+        without knowing the run_id in advance.
+        Internally identical to `GET /api/backtests/live/{run_id}` once the run_id is known.
+      responses:
+        '200':
+          description: Live state of the active run
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LiveBacktestDetail'
+        '404':
+          description: No backtest is currently running
+        '503':
+          description: SQLite database not found on server
+
+  /api/backtests/live/{run_id}:
+    get:
+      tags:
+        - Backtest
+      summary: Live state for any run (active or recently completed) from SQLite
+      description: |
+        Returns open positions, the last 20 fills, and the full equity curve from
+        `portfolio_snapshots.total_value` (one point per decision step, market-timestamped).
+        `is_active` is true only while the run is still writing snapshots.
+        Use this to poll every 2–3 s on the Live Run Monitor page.
+        Once `is_active` becomes false and `portfolio_metrics` is non-null, the run is done —
+        navigate to `/backtests/:runId` for the completed-run view.
+      parameters:
+        - in: path
+          name: run_id
+          required: true
+          schema:
+            type: string
+          example: backtest_20260615_094357
+      responses:
+        '200':
+          description: Live detail for the requested run
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LiveBacktestDetail'
+        '404':
+          description: Run not found in database
+        '503':
+          description: SQLite database not found on server
+
+  /api/backtests/{run_id}:
+    get:
+      tags:
+        - Backtest
+      summary: Get full metrics and asset results for a completed run
+      description: |
+        `portfolio_history` is sourced from SQLite `portfolio_snapshots` when available
+        (one point per decision step, market-timestamped, includes unrealised mark-to-market).
+        Falls back to reconstructing from SELL-side trades for runs that predate the DB.
+      parameters:
+        - in: path
+          name: run_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Complete backtest results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BacktestResult'
+        '404':
+          description: Run directory or required JSON artifacts not found
+
+  /api/backtests/{run_id}/trades:
+    get:
+      tags:
+        - Backtest
+      summary: Get paginated trades for a specific backtest (for data grids)
+      parameters:
+        - in: path
+          name: run_id
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 100
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            default: 0
+        - in: query
+          name: symbol
+          schema:
+            type: string
+            description: Filter by asset symbol
+      responses:
+        '200':
+          description: Paginated trades list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:
+                    type: integer
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Trade'
+
+  /api/backtests/{run_id}/assets:
+    get:
+      tags:
+        - Backtest
+      summary: List assets traded in a run with per-asset summary stats
+      description: |
+        Lightweight call to populate the asset sidebar in the chart explorer.
+        Returns trade counts and P&L per symbol — no OHLCV data.
+      parameters:
+        - in: path
+          name: run_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Asset list ordered by total P&L descending
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AssetSummary'
+
+  /api/backtests/{run_id}/charts/{symbol}:
+    get:
+      tags:
+        - Backtest
+      summary: OHLCV candles + trade markers + regime bands for one asset
+      description: |
+        Lazy-load endpoint for the chart explorer. Slices the raw 5-min CSV to
+        the backtest window only (not the full file, which can be 870k+ rows).
+        Fire this only when the user selects an asset — do NOT prefetch all assets.
+      parameters:
+        - in: path
+          name: run_id
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: symbol
+          required: true
+          schema:
+            type: string
+          example: SOLUSD
+      responses:
+        '200':
+          description: Chart data for one asset
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChartData'
+
+  /api/backtests/jobs/{job_id}/stream:
+    get:
+      tags:
+        - Backtest
+      summary: "SSE: stream decisions and rolling metrics while a backtest runs"
+      description: |
+        Server-Sent Events endpoint. Connect after POST /api/backtests returns a job_id.
+        The server polls SQLite on a ~2 s interval and pushes events as decisions are written.
+        The stream closes automatically when the job completes or fails.
+
+        Event types emitted on the stream:
+        - `decision` — one AIDecision + its execution outcome
+        - `metrics`  — rolling portfolio snapshot (ROI, WR, open positions, capital)
+        - `done`     — job finished; payload contains the final run_id for redirect
+        - `error`    — job failed; payload contains the error message
+      parameters:
+        - in: path
+          name: job_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: text/event-stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: |
+                  Newline-delimited SSE. Examples:
+                  data: {"type":"decision","payload":{...AIDecision...}}
+                  data: {"type":"metrics","payload":{...Metrics...}}
+                  data: {"type":"done","payload":{"run_id":"backtest_20260611_144912"}}
+
+  /api/engine/{session_id}/status:
+    get:
+      tags:
+        - Engine
+      summary: Current engine controls and alive status
+      description: |
+        Reads from ``engine_controls``. ``engine_alive`` is true when the engine
+        wrote a portfolio snapshot within the last 10 minutes (2× the default
+        cadence, chosen to survive slow LLM cycles).
+        ``trading_enabled=false`` means the kill-switch is active.
+      parameters:
+        - in: path
+          name: session_id
+          required: true
+          schema:
+            type: string
+          example: live-paper
+      responses:
+        '200':
+          description: Current engine status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EngineStatus'
+        '404':
+          description: No engine_controls row for this session — engine has not started
+        '503':
+          description: Database not found
+
+  /api/engine/{session_id}/halt:
+    post:
+      tags:
+        - Engine
+      summary: Queue a halt command (disables trading)
+      description: |
+        Inserts a ``halt`` row into ``engine_commands``. The engine picks it up at
+        the top of its next cycle and sets ``trading_enabled=False``.
+        Any open positions are left open — use GET /api/backtests/live/{session_id}
+        to monitor them.
+      parameters:
+        - in: path
+          name: session_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Command queued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  queued:
+                    type: string
+                  session_id:
+                    type: string
+        '404':
+          description: Session not found
+
+  /api/engine/{session_id}/resume:
+    post:
+      tags:
+        - Engine
+      summary: Queue a resume command (re-enables trading)
+      description: |
+        Inserts a ``resume`` row into ``engine_commands``. The engine picks it up at
+        the top of its next cycle and sets ``trading_enabled=True``.
+      parameters:
+        - in: path
+          name: session_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Command queued
+        '404':
+          description: Session not found
+
+  /api/engine/{session_id}/controls:
+    put:
+      tags:
+        - Engine
+      summary: Queue a risk-limit update
+      description: |
+        Inserts a ``set_controls`` row into ``engine_commands``. The engine applies
+        the new limits at the top of its next cycle without restarting.
+        All fields are optional — send only the ones you want to change.
+      parameters:
+        - in: path
+          name: session_id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EngineControls'
+      responses:
+        '200':
+          description: Command queued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  queued:
+                    type: string
+                  session_id:
+                    type: string
+                  payload:
+                    type: object
+        '400':
+          description: No fields provided
+        '404':
+          description: Session not found
+
+components:
+  schemas:
+    EngineStatus:
+      type: object
+      description: |
+        Current state of the live trading engine for a session.
+        Poll ``GET /api/engine/{session_id}/status`` every 15–30 s from the control panel.
+      properties:
+        session_id:
+          type: string
+        trading_enabled:
+          type: boolean
+          description: Kill-switch state — false means the engine will not submit any orders
+        engine_alive:
+          type: boolean
+          description: True when a snapshot was written within the last 10 minutes
+        max_position_size_pct:
+          type: number
+          description: Maximum order size as a fraction of portfolio value (0–1)
+        max_daily_loss_pct:
+          type: number
+          description: Daily loss limit as a fraction of starting capital (0–1)
+        max_open_positions:
+          type: integer
+          description: Maximum number of simultaneously open positions
+        last_snapshot_ts:
+          type: string
+          nullable: true
+          description: ISO 8601 timestamp of the most recent portfolio snapshot
+
+    EngineControls:
+      type: object
+      description: |
+        Risk limit update payload for ``PUT /api/engine/{session_id}/controls``.
+        All fields are optional — include only the ones you want to change.
+      properties:
+        max_position_size_pct:
+          type: number
+          nullable: true
+          description: 0–1 fraction of portfolio value per position
+        max_daily_loss_pct:
+          type: number
+          nullable: true
+          description: 0–1 fraction of starting capital
+        max_open_positions:
+          type: integer
+          nullable: true
+          description: Hard cap on simultaneously open positions
+
+    SystemStatus:
+      type: object
+      properties:
+        rust_core_version:
+          type: string
+        rust_simd_enabled:
+          type: boolean
+        database_size_mb:
+          type: number
+        llm_api_latency_ms:
+          type: number
+        active_agents:
+          type: integer
+
+    SignalType:
+      type: string
+      enum:
+        - strong_buy
+        - buy
+        - weak_buy
+        - strong_sell
+        - sell
+        - weak_sell
+        - strong_short
+        - short
+        - hold
+        - close
+        - bullish_reversal
+        - bearish_reversal
+        - neutral
+
+    TradeSide:
+      type: string
+      enum: [BUY, SELL]
+
+    MarketRegime:
+      type: string
+      enum:
+        - trend_up
+        - sideways
+        - trend_down
+        - unknown
+
+    BacktestConfig:
+      type: object
+      properties:
+        initial_capital:
+          type: number
+          default: 10000.0
+        transaction_fee:
+          type: number
+          default: 0.0026
+        slippage_pct:
+          type: number
+          default: 0.001
+          description: One-way slippage applied at fill price (0.1% default)
+        max_positions:
+          type: integer
+          default: 15
+        max_position_pct:
+          type: number
+          default: 0.2
+        target_decisions:
+          type: integer
+          default: 130
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        enable_short_selling:
+          type: boolean
+        enable_compounding:
+          type: boolean
+        enable_trailing_stops:
+          type: boolean
+          default: true
+        disable_ai_exits:
+          type: boolean
+          default: true
+          description: Suppress AI-driven sell signals; trailing stops are sole exit
+        pattern_analysis_enabled:
+          type: boolean
+          default: true
+        risk_assessment_enabled:
+          type: boolean
+          default: true
+        sentiment_analysis_enabled:
+          type: boolean
+          default: false
+        correlation_analysis_enabled:
+          type: boolean
+          default: true
+        fixed_universe_enabled:
+          type: boolean
+          default: true
+          description: Pin T0–T3 assets; scanner becomes tagger only
+        dual_portfolio_enabled:
+          type: boolean
+          default: true
+          description: 80% quality / 20% meme bucket split
+        regime_continuous_enabled:
+          type: boolean
+          default: true
+          description: Smooth ramp over P(trend_up) replacing hard 0.70 cliff
+        position_rotation_enabled:
+          type: boolean
+          default: true
+          description: M9.D — rotate out weakest position when book full and higher-conviction signal arrives
+        mock_critic:
+          type: boolean
+          default: false
+          description: Stub LLM to always agree; use for deterministic gate runs
+        anti_averaging_down_enabled:
+          type: boolean
+          default: true
+          description: Block adding to a position that is already losing
+        vol_trail_enabled:
+          type: boolean
+          default: false
+          description: "P2 — ATR-scaled trailing stop width (trail = adaptive stop × multiplier); when off the executor uses a fixed 3% trail"
+        vol_trail_multiplier:
+          type: number
+          default: 1.0
+          description: Scales the ATR-derived stop distance; only used when vol_trail_enabled=true
+        vol_trail_floor:
+          type: number
+          default: 0.02
+          description: Minimum trail width (2%); prevents whipsaw on low-vol assets
+        vol_trail_ceiling:
+          type: number
+          default: 0.15
+          description: Maximum trail width (15%); caps ultra-vol spike exposure
+
+    Metrics:
+      type: object
+      properties:
+        roi:
+          type: number
+        total_pnl:
+          type: number
+        sharpe_ratio:
+          type: number
+        max_drawdown:
+          type: number
+        total_trades:
+          type: integer
+        winning_trades:
+          type: integer
+        losing_trades:
+          type: integer
+        win_rate:
+          type: number
+        avg_win:
+          type: number
+        avg_loss:
+          type: number
+        avg_trade_pnl:
+          type: number
+        avg_hold_duration_hours:
+          type: number
+        final_capital:
+          type: number
+        peak_capital:
+          type: number
+        max_concurrent_positions:
+          type: integer
+        buy_and_hold_roi:
+          type: number
+          description: Equal-weight buy-and-hold ROI for the traded universe
+        capture_ratio:
+          type: number
+          description: System ROI ÷ buy-and-hold ROI; target ≥ 1.0 for positive alpha
+
+    Trade:
+      type: object
+      properties:
+        symbol:
+          type: string
+        side:
+          $ref: '#/components/schemas/TradeSide'
+        size:
+          type: number
+        price:
+          type: number
+        timestamp:
+          type: string
+          format: date-time
+        pnl:
+          type: number
+        pnl_pct:
+          type: number
+        hold_duration_hours:
+          type: number
+        reason:
+          type: string
+
+    Position:
+      type: object
+      properties:
+        id:
+          type: integer
+        symbol:
+          type: string
+        side:
+          $ref: '#/components/schemas/TradeSide'
+        size:
+          type: number
+        entry_price:
+          type: number
+        entry_time:
+          type: string
+          format: date-time
+        unrealized_pnl:
+          type: number
+        unrealized_pnl_pct:
+          type: number
+        trailing_stop_active:
+          type: boolean
+        trailing_stop_price:
+          type: number
+
+    AIDecision:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        symbol:
+          type: string
+        signal:
+          $ref: '#/components/schemas/SignalType'
+        confidence:
+          type: number
+        price:
+          type: number
+        pm_position_size:
+          type: number
+        pm_stop_loss:
+          type: number
+        pm_take_profit:
+          type: number
+
+    BacktestJobStatus:
+      type: object
+      properties:
+        job_id:
+          type: string
+        status:
+          type: string
+          enum: [queued, running, completed, failed]
+        run_id:
+          type: string
+          nullable: true
+          description: Populated once the run completes; use to call GET /api/backtests/{run_id}
+        progress_pct:
+          type: number
+          nullable: true
+          description: 0–100 while running
+        error:
+          type: string
+          nullable: true
+
+    AssetSummary:
+      type: object
+      description: Per-asset summary for the runs browser sidebar. No OHLCV included.
+      properties:
+        symbol:
+          type: string
+        trades:
+          type: integer
+        win_rate:
+          type: number
+        pnl:
+          type: number
+        roi:
+          type: number
+        regime_coverage:
+          type: object
+          description: Fraction of decisions per HMM regime for this asset
+          properties:
+            trend_up:
+              type: number
+            sideways:
+              type: number
+            trend_down:
+              type: number
+
+    OHLCVCandle:
+      type: object
+      properties:
+        time:
+          type: integer
+          description: Unix timestamp in seconds (TradingView Lightweight Charts format)
+        open:
+          type: number
+        high:
+          type: number
+        low:
+          type: number
+        close:
+          type: number
+        volume:
+          type: number
+
+    TradeMarker:
+      type: object
+      description: Entry or exit event to overlay as a marker on the candlestick chart
+      properties:
+        time:
+          type: integer
+          description: Unix timestamp in seconds
+        side:
+          $ref: '#/components/schemas/TradeSide'
+        price:
+          type: number
+        pnl:
+          type: number
+          nullable: true
+          description: Null for entries; realised P&L for exits
+        reason:
+          type: string
+          description: "Exit reason: trailing_stop | ai_exit | end_of_backtest | rotation | hard_stop"
+
+    RegimeBand:
+      type: object
+      description: HMM regime segment rendered as a coloured background band on the chart
+      properties:
+        start_time:
+          type: integer
+          description: Unix timestamp in seconds
+        end_time:
+          type: integer
+          description: Unix timestamp in seconds
+        regime:
+          $ref: '#/components/schemas/MarketRegime'
+        confidence:
+          type: number
+          description: HMM posterior probability for this label
+
+    ChartData:
+      type: object
+      properties:
+        symbol:
+          type: string
+        candles:
+          type: array
+          items:
+            $ref: '#/components/schemas/OHLCVCandle'
+          description: 5-min OHLCV sliced to the backtest window only
+        markers:
+          type: array
+          items:
+            $ref: '#/components/schemas/TradeMarker'
+          description: All entry and exit events for this symbol in this run
+        regime_bands:
+          type: array
+          items:
+            $ref: '#/components/schemas/RegimeBand'
+          description: HMM regime segments as background colour bands
+
+    EquityPoint:
+      type: object
+      description: |
+        One point on the portfolio equity curve.
+        Source for completed runs: SQLite `portfolio_snapshots.total_value` (one point per
+        decision step, market-timestamped, includes unrealised mark-to-market).
+        Fallback for pre-DB runs: reconstructed from SELL-side trades only (realised P&L steps).
+      properties:
+        time:
+          type: integer
+          description: Unix timestamp in seconds
+        capital:
+          type: number
+        roi_pct:
+          type: number
+
+    BacktestSummary:
+      type: object
+      description: Row in the runs browser table. Includes config flags so the flag chip column can render without a second request.
+      properties:
+        run_id:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        metrics:
+          $ref: '#/components/schemas/Metrics'
+        config:
+          $ref: '#/components/schemas/BacktestConfig'
+
+    AssetResult:
+      type: object
+      properties:
+        symbol:
+          type: string
+        trades:
+          type: integer
+        capital_invested:
+          type: number
+        metrics:
+          $ref: '#/components/schemas/Metrics'
+
+    BacktestResult:
+      type: object
+      properties:
+        run_id:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        config:
+          $ref: '#/components/schemas/BacktestConfig'
+        portfolio_metrics:
+          $ref: '#/components/schemas/Metrics'
+        asset_results:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/AssetResult'
+        portfolio_history:
+          type: array
+          items:
+            $ref: '#/components/schemas/EquityPoint'
+          description: |
+            Time-series equity curve. Sourced from SQLite portfolio_snapshots when available
+            (richer cadence, includes unrealised value); falls back to SELL-event reconstruction.
+
+    OpenPosition:
+      type: object
+      description: An open position as recorded in SQLite at the last decision step
+      properties:
+        symbol:
+          type: string
+        side:
+          $ref: '#/components/schemas/TradeSide'
+        quantity:
+          type: number
+        entry_price:
+          type: number
+        current_price:
+          type: number
+          description: Mark-to-market price at the most recent snapshot
+        unrealized_pnl_pct:
+          type: number
+          description: (current_price − entry_price) / entry_price × 100
+        trailing_stop_active:
+          type: boolean
+        trailing_stop_price:
+          type: number
+          nullable: true
+
+    LiveFill:
+      type: object
+      description: A fill (buy or sell) from the SQLite trades table
+      properties:
+        symbol:
+          type: string
+        side:
+          $ref: '#/components/schemas/TradeSide'
+        price:
+          type: number
+        quantity:
+          type: number
+        timestamp:
+          type: string
+          description: Market timestamp of the fill (ISO 8601)
+
+    LiveSnapshot:
+      type: object
+      description: |
+        Current portfolio state derived from the latest `portfolio_snapshots` row.
+        All monetary values are in the run's base currency (USD).
+      properties:
+        portfolio_value:
+          type: number
+          description: Total mark-to-market portfolio value
+        pnl:
+          type: number
+          description: Absolute P&L vs initial capital
+        pnl_pct:
+          type: number
+          description: Percentage P&L vs initial capital
+        drawdown_pct:
+          type: number
+          description: Maximum drawdown from peak so far, as a percentage
+        open_positions_count:
+          type: integer
+        decisions_done:
+          type: integer
+          description: Number of decision steps completed (= snapshot count)
+        decisions_target:
+          type: integer
+          description: Total decision steps configured for this run
+        last_snapshot_ts:
+          type: string
+          description: Market timestamp of the most recent snapshot (ISO 8601)
+
+    LiveBacktestDetail:
+      type: object
+      description: |
+        Full live view of a running or recently completed backtest.
+        Sourced entirely from SQLite — no JSON file dependency except `run_metadata.json`
+        (for config) and `portfolio_summary.json` (for final metrics, only after completion).
+      properties:
+        run_id:
+          type: string
+        is_active:
+          type: boolean
+          description: True while the run is still writing snapshots (within last 60 s)
+        config:
+          $ref: '#/components/schemas/BacktestConfig'
+          nullable: true
+          description: Null if run_metadata.json is not yet written
+        snapshot:
+          $ref: '#/components/schemas/LiveSnapshot'
+          nullable: true
+        open_positions:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpenPosition'
+          description: All currently open positions, ordered by unrealised P&L descending
+        recent_fills:
+          type: array
+          items:
+            $ref: '#/components/schemas/LiveFill'
+          description: Last 20 fills, newest first
+        equity_curve:
+          type: array
+          items:
+            $ref: '#/components/schemas/EquityPoint'
+          description: Full portfolio value time series from portfolio_snapshots
+        portfolio_metrics:
+          $ref: '#/components/schemas/Metrics'
+          nullable: true
+          description: Non-null only after the run completes and portfolio_summary.json is written

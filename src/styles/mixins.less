@@ -1,0 +1,324 @@
+// Import variables
+@import 'variables.less';
+
+// Fintech Grid Background Mixin
+.grid-background() {
+    background: @grid-bg;
+    background-size: @grid-size @grid-size;
+    background-position: center;
+}
+
+// Enhanced Glass Effect Mixins
+.glass-effect() {
+    background: @glass-bg;
+    backdrop-filter: blur(@backdrop-blur);
+    -webkit-backdrop-filter: blur(@backdrop-blur);
+    border: 1px solid @border-color;
+    border-radius: @radius-md;
+    box-shadow: @shadow-glass;
+}
+
+.glass-effect-heavy() {
+    background: @glass-bg-heavy;
+    backdrop-filter: blur(@backdrop-blur-heavy);
+    -webkit-backdrop-filter: blur(@backdrop-blur-heavy);
+    border: 1px solid @border-color-focus;
+    border-radius: @radius-md;
+    box-shadow: @shadow-glass-heavy;
+}
+
+.glass-effect-light() {
+    background: @glass-bg-light;
+    backdrop-filter: blur(@backdrop-blur-light);
+    -webkit-backdrop-filter: blur(@backdrop-blur-light);
+    border: 1px solid @border-color;
+    border-radius: @radius-md;
+    box-shadow: @shadow-glass-light;
+}
+
+.gradient-bg(@gradient: @gradient-primary) {
+    background: @gradient;
+}
+
+.hover-lift() {
+    transition: transform @transition-normal, box-shadow @transition-normal;
+
+    &:hover {
+        transform: translateY(-2px);
+        box-shadow: @shadow-lg;
+    }
+}
+
+.card-base() {
+    .glass-effect();
+    border-radius: @radius-xl;
+    padding: @spacing-lg;
+    transition: all @transition-normal;
+    position: relative;
+    overflow: hidden;
+
+    &::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.05), transparent 50%);
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    }
+
+    &:hover {
+        border-color: @border-color-hover;
+        transform: translateY(-2px);
+        box-shadow: @shadow-card-hover;
+
+        &::before {
+            opacity: 1;
+        }
+    }
+}
+
+// Fintech Accent Card Mixins
+.accent-card(@color, @bg-color, @border-color) {
+    .card-base();
+    border-color: @border-color;
+
+    &::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background: @color;
+        opacity: 0.8;
+    }
+
+    &:hover {
+        border-color: @border-color;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), 0 0 0 1px @border-color;
+    }
+}
+
+.orange-accent-card() {
+    .accent-card(@color-orange, @color-orange-bg, @color-orange-border);
+}
+
+.violet-accent-card() {
+    .accent-card(@color-violet, @color-violet-bg, @color-violet-border);
+}
+
+.blue-accent-card() {
+    .accent-card(@color-blue, @color-blue-bg, @color-blue-border);
+}
+
+.rose-accent-card() {
+    .accent-card(@color-rose, @color-rose-bg, @color-rose-border);
+}
+
+// Enhanced Button mixins
+.btn-base() {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid @border-color;
+    border-radius: @radius-md;
+    padding: @spacing-sm @spacing-md;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all @transition-fast;
+    text-decoration: none;
+    background: @glass-bg-light;
+    backdrop-filter: blur(@backdrop-blur-light);
+    -webkit-backdrop-filter: blur(@backdrop-blur-light);
+    color: @text-primary;
+    position: relative;
+    overflow: hidden;
+
+    &::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    }
+
+    &:hover:not(:disabled) {
+        border-color: @border-color-hover;
+        background: @glass-bg;
+        transform: translateY(-1px);
+        box-shadow: @shadow-hover;
+
+        &::before {
+            opacity: 1;
+        }
+    }
+
+    &:active {
+        transform: translateY(0);
+    }
+
+    &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+}
+
+.btn-primary() {
+    .btn-base();
+    .gradient-bg(@gradient-primary);
+    color: @text-primary;
+
+    &:hover:not(:disabled) {
+        transform: translateY(-1px);
+        box-shadow: @shadow-md;
+    }
+}
+
+.btn-secondary() {
+    .btn-base();
+    background: @secondary-bg;
+    color: @text-secondary;
+    border: 1px solid @border-color;
+
+    &:hover:not(:disabled) {
+        background: @tertiary-bg;
+        border-color: @border-color-hover;
+        color: @text-primary;
+    }
+}
+
+.btn-success() {
+    .btn-base();
+    .gradient-bg(@gradient-success);
+    color: @text-primary;
+
+    &:hover:not(:disabled) {
+        transform: translateY(-1px);
+        box-shadow: @shadow-md;
+    }
+}
+
+.btn-danger() {
+    .btn-base();
+    .gradient-bg(@gradient-danger);
+    color: @text-primary;
+
+    &:hover:not(:disabled) {
+        transform: translateY(-1px);
+        box-shadow: @shadow-md;
+    }
+}
+
+// Status mixins
+.status-success() {
+    background: @color-success-bg;
+    border: 1px solid @color-success-border;
+    color: @color-success-light;
+}
+
+.status-danger() {
+    background: @color-danger-bg;
+    border: 1px solid @color-danger-border;
+    color: @color-danger-light;
+}
+
+.status-warning() {
+    background: @color-warning-bg;
+    border: 1px solid @color-warning-border;
+    color: @color-warning;
+}
+
+// Text mixins
+.text-gradient(@gradient: @gradient-primary) {
+    background: @gradient;
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-weight: 700;
+}
+
+// Layout mixins
+.flex-center() {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.flex-between() {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.absolute-center() {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+// Responsive mixins
+.responsive(@property, @mobile-value, @desktop-value) {
+    @{property}: @mobile-value;
+
+    @media (min-width: @screen-md) {
+        @{property}: @desktop-value;
+    }
+}
+
+// Animation mixins
+.fade-in(@duration: @transition-normal) {
+    opacity: 0;
+    animation: fadeIn @duration ease-out forwards;
+}
+
+.slide-up(@duration: @transition-normal) {
+    transform: translateY(20px);
+    opacity: 0;
+    animation: slideUp @duration ease-out forwards;
+}
+
+// Keyframes
+@keyframes fadeIn {
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes slideUp {
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.5;
+    }
+}
+
+// Spinner mixin
+.spinner() {
+    animation: spin 1s linear infinite;
+}

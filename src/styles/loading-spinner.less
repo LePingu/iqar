@@ -1,0 +1,112 @@
+@import 'variables.less';
+@import 'mixins.less';
+
+// Loading Spinner Styles
+.loading-spinner {
+    .flex-center();
+    flex-direction: column;
+    padding: @spacing-2xl 0;
+
+    &__animation {
+        position: relative;
+        margin-bottom: @spacing-xl;
+
+        .outer-ring {
+            width: 80px;
+            height: 80px;
+            border: 2px solid @secondary-bg;
+            border-radius: 50%;
+            animation: spin 3s linear infinite;
+        }
+
+        .blue-ring {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 80px;
+            height: 80px;
+            border: 2px solid transparent;
+            border-top-color: #3b82f6;
+            border-right-color: #1d4ed8;
+            border-radius: 50%;
+            animation: spin 1.5s linear infinite reverse;
+        }
+
+        .violet-ring {
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            width: 64px;
+            height: 64px;
+            border: 2px solid transparent;
+            border-top-color: #8b5cf6;
+            border-left-color: #7c3aed;
+            border-radius: 50%;
+            animation: spin 2s linear infinite;
+        }
+
+        .center-core {
+            .absolute-center();
+            width: 24px;
+            height: 24px;
+            .gradient-bg(@gradient-primary);
+            border-radius: 50%;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+    }
+
+    &__content {
+        text-align: center;
+        animation: pulse 2s ease-in-out infinite;
+
+        .title {
+            font-size: 20px;
+            font-weight: 700;
+            color: @text-primary;
+            margin-bottom: @spacing-sm;
+        }
+
+        .description {
+            color: @text-muted;
+        }
+    }
+
+    &__dots {
+        display: flex;
+        gap: @spacing-sm;
+        margin-top: @spacing-lg;
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            .gradient-bg(@gradient-primary);
+
+            &:nth-child(1) {
+                animation: bounce 1.5s ease-in-out infinite;
+            }
+
+            &:nth-child(2) {
+                animation: bounce 1.5s ease-in-out infinite 0.3s;
+            }
+
+            &:nth-child(3) {
+                animation: bounce 1.5s ease-in-out infinite 0.6s;
+            }
+        }
+    }
+}
+
+@keyframes bounce {
+
+    0%,
+    100% {
+        transform: translateY(0);
+        opacity: 0.5;
+    }
+
+    50% {
+        transform: translateY(-12px);
+        opacity: 1;
+    }
+}

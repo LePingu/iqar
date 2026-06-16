@@ -1,0 +1,550 @@
+@import 'variables.less';
+@import 'mixins.less';
+
+// Trading Dashboard Styles
+.trading-dashboard {
+    min-height: 100vh;
+    background: transparent;
+    color: @text-primary;
+    position: relative;
+
+    .container {
+        max-width: 1536px;
+        margin: 0 auto;
+        position: relative;
+        z-index: 1;
+    }
+
+    // Header Styles
+    &__header {
+        position: sticky;
+        top: 0;
+        z-index: 40;
+        .glass-effect-heavy();
+        border-bottom: 1px solid @border-color-hover;
+
+        .header-content {
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: @spacing-md @spacing-lg;
+
+            .header-main {
+                display: flex;
+                flex-wrap: wrap;
+                justify-content: space-between;
+                align-items: center;
+                gap: @spacing-md;
+
+                .brand-section {
+                    display: flex;
+                    align-items: center;
+                    gap: @spacing-lg;
+
+                    .brand {
+                        display: flex;
+                        align-items: center;
+                        gap: @spacing-md;
+
+                        .logo {
+                            width: 48px;
+                            height: 48px;
+                            .gradient-bg(@gradient-orange);
+                            border-radius: @radius-md;
+                            .flex-center();
+
+                            .logo-text {
+                                color: @text-primary;
+                                font-weight: 900;
+                                font-size: 18px;
+                            }
+                        }
+
+                        .brand-info {
+                            .title {
+                                font-size: 24px;
+                                font-weight: 900;
+                                .text-gradient(@gradient-primary);
+                            }
+
+                            .subtitle {
+                                color: @text-muted;
+                                font-size: 14px;
+                            }
+                        }
+                    }
+
+                    .demo-badge {
+                        background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(251, 146, 60, 0.2));
+                        border: 1px solid rgba(245, 158, 11, 0.3);
+                        border-radius: @radius-sm;
+                        padding: @spacing-sm @spacing-md;
+                        display: flex;
+                        align-items: center;
+                        gap: @spacing-sm;
+                        animation: pulse 2s ease-in-out infinite;
+
+                        .indicator {
+                            width: 8px;
+                            height: 8px;
+                            background: #fbbf24;
+                            border-radius: 50%;
+                            animation: pulse 1s ease-in-out infinite;
+                        }
+
+                        .text {
+                            color: #fcd34d;
+                            font-size: 14px;
+                            font-weight: 500;
+                        }
+                    }
+                }
+
+                .header-actions {
+                    display: flex;
+                    align-items: center;
+                    gap: @spacing-md;
+
+                    .action-btn {
+                        .btn-secondary();
+                        padding: @spacing-sm @spacing-lg;
+                        font-size: 16px;
+
+                        &:hover {
+                            transform: scale(1.05);
+                        }
+
+                        svg {
+                            width: 20px;
+                            height: 20px;
+                            color: @text-secondary;
+                        }
+                    }
+
+                    .toggle-switch {
+                        display: flex;
+                        align-items: center;
+                        gap: @spacing-sm;
+
+                        .label {
+                            font-size: 14px;
+                            color: @text-muted;
+                        }
+
+                        .switch {
+                            width: 48px;
+                            height: 24px;
+                            border-radius: 12px;
+                            display: flex;
+                            align-items: center;
+                            padding: 4px;
+                            cursor: pointer;
+                            transition: background-color @transition-normal;
+
+                            &--active {
+                                .gradient-bg(@gradient-primary);
+                            }
+
+                            &--inactive {
+                                background: @tertiary-bg;
+                            }
+
+                            .handle {
+                                width: 16px;
+                                height: 16px;
+                                background: @text-primary;
+                                border-radius: 50%;
+                                box-shadow: @shadow-sm;
+                                transition: transform @transition-normal;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Main Content
+    &__main {
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: @spacing-xl @spacing-lg;
+    }
+
+    // Portfolio Overview
+    &__portfolio {
+        margin-bottom: @spacing-xl;
+
+        .portfolio-card {
+            .card-base();
+            padding: @spacing-xl;
+
+            .portfolio-header {
+                display: flex;
+                flex-direction: column;
+                gap: @spacing-lg;
+                margin-bottom: @spacing-xl;
+
+                @media (min-width: @screen-lg) {
+                    flex-direction: row;
+                    justify-content: space-between;
+                    align-items: center;
+                }
+
+                .header-info {
+                    .title {
+                        font-size: 32px;
+                        font-weight: 900;
+                        color: @text-primary;
+                        margin-bottom: @spacing-sm;
+                    }
+
+                    .subtitle {
+                        color: @text-muted;
+                    }
+                }
+
+                .portfolio-value {
+                    display: flex;
+                    align-items: center;
+                    gap: @spacing-md;
+
+                    .value-section {
+                        text-align: right;
+
+                        .total-value {
+                            font-size: 36px;
+                            font-weight: 900;
+                            color: @text-primary;
+                        }
+
+                        .label {
+                            color: @text-muted;
+                            font-size: 14px;
+                        }
+                    }
+
+                    .pnl-badge {
+                        padding: @spacing-sm @spacing-md;
+                        border-radius: @radius-lg;
+                        font-weight: 700;
+                        font-size: 18px;
+
+                        &--profit {
+                            background: @color-success-bg;
+                            color: @color-success;
+                            border: 1px solid @color-success-border;
+                        }
+
+                        &--loss {
+                            background: @color-danger-bg;
+                            color: @color-danger;
+                            border: 1px solid @color-danger-border;
+                        }
+                    }
+                }
+            }
+
+            .stats-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                gap: @spacing-lg;
+            }
+        }
+    }
+
+    // Stats Card
+    .stat-card {
+        .card-base();
+        .hover-lift();
+
+        .stat-header {
+            .flex-between();
+            margin-bottom: @spacing-md;
+
+            .stat-icon {
+                width: 48px;
+                height: 48px;
+                border-radius: @radius-md;
+                .flex-center();
+                box-shadow: @shadow-lg;
+
+                &--primary {
+                    .gradient-bg(@gradient-primary);
+                }
+
+                &--success {
+                    .gradient-bg(@gradient-success);
+                }
+
+                &--danger {
+                    .gradient-bg(@gradient-danger);
+                }
+
+                &--accent {
+                    .gradient-bg(@gradient-accent);
+                }
+
+                svg {
+                    color: @text-primary;
+                }
+            }
+
+            .status-dot {
+                width: 12px;
+                height: 12px;
+                border-radius: 50%;
+                animation: pulse 1s ease-in-out infinite;
+
+                &--profit {
+                    background: @color-success;
+                }
+
+                &--loss {
+                    background: @color-danger;
+                }
+            }
+        }
+
+        .stat-content {
+            .stat-title {
+                font-size: 14px;
+                font-weight: 500;
+                color: @text-muted;
+                margin-bottom: @spacing-sm;
+            }
+
+            .stat-value {
+                font-size: 24px;
+                font-weight: 900;
+                font-family: monospace;
+
+                &--primary {
+                    color: @text-primary;
+                }
+
+                &--success {
+                    color: @color-success;
+                }
+
+                &--danger {
+                    color: @color-danger;
+                }
+            }
+        }
+    }
+
+    // Trades Section
+    &__trades {
+        .trades-header {
+            .flex-between();
+            margin-bottom: @spacing-lg;
+
+            .header-info {
+                .title {
+                    font-size: 24px;
+                    font-weight: 900;
+                    color: @text-primary;
+                    margin-bottom: @spacing-xs;
+                }
+
+                .subtitle {
+                    color: @text-muted;
+                }
+            }
+
+            .trades-actions {
+                display: flex;
+                align-items: center;
+                gap: @spacing-md;
+
+                .filter-toggle {
+                    .filter-btn {
+                        .btn-base();
+                        padding: @spacing-sm @spacing-md;
+                        font-size: 14px;
+                        display: flex;
+                        align-items: center;
+                        gap: @spacing-xs;
+                        transition: all @transition-fast;
+
+                        &--active {
+                            background: @color-orange-bg;
+                            border-color: @color-orange-border;
+                            color: @color-orange;
+
+                            &:hover {
+                                background: @color-orange-bg;
+                                border-color: @color-orange;
+                                transform: translateY(-1px);
+                            }
+                        }
+
+                        &--inactive {
+                            color: @text-muted;
+
+                            &:hover {
+                                color: @text-secondary;
+                                border-color: @border-color-hover;
+                            }
+                        }
+
+                        svg {
+                            width: 16px;
+                            height: 16px;
+                        }
+                    }
+                }
+
+                .view-toggle {
+                    background: rgba(107, 114, 128, 0.5);
+                    border: 1px solid @border-color;
+                    border-radius: @radius-md;
+                    padding: 4px;
+                    display: flex;
+
+                    .toggle-btn {
+                        .btn-base();
+                        padding: @spacing-sm @spacing-md;
+                        font-size: 14px;
+
+                        &--active {
+                            background: rgba(255, 255, 255, 0.1);
+                            color: @text-primary;
+                            border: 1px solid rgba(107, 114, 128, 0.5);
+                        }
+
+                        &--inactive {
+                            color: @text-muted;
+
+                            &:hover {
+                                color: @text-secondary;
+                            }
+                        }
+
+                        svg {
+                            width: 16px;
+                            height: 16px;
+                            margin-right: @spacing-xs;
+                        }
+                    }
+                }
+
+                .trades-count {
+                    background: rgba(107, 114, 128, 0.5);
+                    border: 1px solid @border-color;
+                    border-radius: @radius-md;
+                    padding: @spacing-sm @spacing-md;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    gap: @spacing-xs;
+
+                    .count {
+                        color: @text-secondary;
+                        font-weight: 500;
+                    }
+
+                    .filter-label {
+                        color: @color-orange;
+                        font-size: 12px;
+                        font-weight: 500;
+                    }
+                }
+            }
+        }
+
+        .trades-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: @spacing-lg;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: @spacing-2xl 0;
+            .card-base();
+
+            .empty-icon {
+                width: 80px;
+                height: 80px;
+                background: @tertiary-bg;
+                border-radius: @radius-2xl;
+                .flex-center();
+                margin: 0 auto @spacing-lg;
+
+                svg {
+                    width: 48px;
+                    height: 48px;
+                    color: @text-muted;
+                }
+            }
+
+            .title {
+                font-size: 20px;
+                font-weight: 700;
+                color: @text-secondary;
+                margin-bottom: @spacing-sm;
+            }
+
+            .description {
+                color: @text-muted;
+            }
+        }
+    }
+
+    // Configuration Screen
+    &__config {
+        min-height: 100vh;
+        .flex-center();
+        padding: @spacing-md;
+
+        .config-card {
+            max-width: 512px;
+            width: 100%;
+            .card-base();
+            padding: @spacing-2xl;
+            text-align: center;
+
+            .config-icon {
+                width: 80px;
+                height: 80px;
+                .gradient-bg(@gradient-primary);
+                border-radius: @radius-lg;
+                .flex-center();
+                margin: 0 auto @spacing-xl;
+
+                svg {
+                    color: @text-primary;
+                    font-size: 32px;
+                }
+            }
+
+            .config-title {
+                font-size: 36px;
+                font-weight: 900;
+                .text-gradient(@gradient-primary);
+                margin-bottom: @spacing-lg;
+            }
+
+            .config-description {
+                color: @text-muted;
+                font-size: 18px;
+                margin-top: @spacing-lg;
+            }
+
+            .demo-btn {
+                .btn-primary();
+                padding: @spacing-md @spacing-xl;
+                font-size: 16px;
+                font-weight: 700;
+                border-radius: @radius-lg;
+                margin-top: @spacing-xl;
+
+                &:hover {
+                    transform: translateY(-2px) scale(1.05);
+                    box-shadow: @shadow-lg;
+                }
+            }
+        }
+    }
+}

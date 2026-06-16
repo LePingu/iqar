@@ -1,0 +1,266 @@
+@import 'variables.less';
+@import 'mixins.less';
+
+// Trades Table Styles
+.trades-table {
+    .card-base();
+    padding: 0;
+
+    &__header {
+        padding: @spacing-lg;
+
+        .header-content {
+            .flex-between();
+
+            .title-section {
+                .title {
+                    font-size: 20px;
+                    font-weight: 700;
+                    color: @text-primary;
+                    margin-bottom: @spacing-xs;
+                }
+
+                .subtitle {
+                    color: @text-muted;
+                    font-size: 14px;
+                }
+            }
+
+            .actions {
+                display: flex;
+                align-items: center;
+                gap: @spacing-sm;
+
+                .stats {
+                    text-align: right;
+
+                    .label {
+                        font-size: 14px;
+                        color: @text-muted;
+                    }
+
+                    .value {
+                        font-size: 18px;
+                        font-weight: 700;
+                        color: @text-primary;
+                    }
+                }
+
+                .menu-btn {
+                    .btn-secondary();
+                    padding: @spacing-sm;
+
+                    &:hover {
+                        background: rgba(107, 114, 128, 0.5);
+                    }
+                }
+            }
+        }
+    }
+
+    &__content {
+        overflow-x: auto;
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+
+            thead {
+                th {
+                    text-align: left;
+                    padding: @spacing-md @spacing-lg;
+                    font-size: 12px;
+                    font-weight: 500;
+                    color: @text-muted;
+                    text-transform: uppercase;
+                    letter-spacing: 0.05em;
+
+                    &.text-right {
+                        text-align: right;
+                    }
+                }
+            }
+
+            tbody {
+                tr {
+                    transition: background-color @transition-fast;
+
+                    &:hover {
+                        background: rgba(107, 114, 128, 0.2);
+                    }
+
+                    td {
+                        padding: @spacing-md @spacing-lg;
+                        vertical-align: middle;
+
+                        &.text-right {
+                            text-align: right;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Trade Row Styles
+.trade-row {
+    &__asset {
+        display: flex;
+        align-items: center;
+        gap: @spacing-sm;
+
+        .asset-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: @radius-sm;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 700;
+            color: @text-primary;
+
+            &--profit {
+                background: @color-success-bg;
+                border: 1px solid @color-success-border;
+            }
+
+            &--loss {
+                background: @color-danger-bg;
+                border: 1px solid @color-danger-border;
+            }
+        }
+
+        .asset-info {
+            .name {
+                font-size: 14px;
+                font-weight: 500;
+                color: @text-primary;
+            }
+
+            .pair {
+                font-size: 12px;
+                color: @text-muted;
+            }
+        }
+    }
+
+    &__type {
+        .type-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: @spacing-xs @spacing-sm;
+            border-radius: @radius-sm;
+            font-size: 12px;
+            font-weight: 500;
+
+            &--buy {
+                background: @color-success-bg;
+                color: @color-success;
+                border: 1px solid @color-success-border;
+            }
+
+            &--sell {
+                background: @color-danger-bg;
+                color: @color-danger;
+                border: 1px solid @color-danger-border;
+            }
+        }
+    }
+
+    &__price {
+        font-family: monospace;
+        font-size: 14px;
+        color: @text-primary;
+
+        &--current {
+            font-weight: 500;
+
+            &.profit {
+                color: @color-success;
+            }
+
+            &.loss {
+                color: @color-danger;
+            }
+        }
+    }
+
+    &__date {
+        font-size: 12px;
+        color: @text-muted;
+    }
+
+    &__pnl {
+        .pnl-container {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: @spacing-sm;
+
+            .pnl-value {
+                display: flex;
+                align-items: center;
+                gap: @spacing-xs;
+
+                &--profit {
+                    color: @color-success;
+                }
+
+                &--loss {
+                    color: @color-danger;
+                }
+
+                .value {
+                    font-family: monospace;
+                    font-size: 14px;
+                    font-weight: 700;
+                }
+
+                svg {
+                    width: 12px;
+                    height: 12px;
+                }
+            }
+        }
+
+        .percentage {
+            font-size: 12px;
+            font-weight: 500;
+            margin-top: @spacing-xs;
+
+            &--profit {
+                color: @color-success;
+            }
+
+            &--loss {
+                color: @color-danger;
+            }
+        }
+    }
+
+    &__actions {
+        .action-btn {
+            .btn-secondary();
+            padding: @spacing-xs;
+            opacity: 0;
+            transition: opacity @transition-fast;
+
+            &:hover {
+                background: rgba(107, 114, 128, 0.5);
+            }
+
+            svg {
+                width: 16px;
+                height: 16px;
+            }
+        }
+    }
+
+    &:hover {
+        .trade-row__actions .action-btn {
+            opacity: 1;
+        }
+    }
+}

@@ -1,0 +1,114 @@
+// Import all component styles
+@import 'variables.less';
+@import 'mixins.less';
+@import 'trade-card.less';
+@import 'loading-spinner.less';
+@import 'error-display.less';
+@import 'trades-table.less';
+@import 'account-balance.less';
+@import 'trading-dashboard.less';
+
+// Global styles
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+        'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+        sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background-color: @primary-bg;
+    background-image:
+        linear-gradient(rgba(255, 255, 255, 0.1) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.1) 1px, transparent 1px);
+    background-size: 24px 24px;
+    background-position: center;
+    color: @text-primary;
+    line-height: 1.5;
+    min-height: 100vh;
+    position: relative;
+}
+
+// Scrollbar styles
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: @secondary-bg;
+}
+
+::-webkit-scrollbar-thumb {
+    background: @tertiary-bg;
+    border-radius: 4px;
+
+    &:hover {
+        background: rgba(107, 114, 128, 0.8);
+    }
+}
+
+// Focus styles
+*:focus {
+    outline: 2px solid @text-accent;
+    outline-offset: 2px;
+}
+
+// Selection styles
+::selection {
+    background: rgba(59, 130, 246, 0.3);
+    color: @text-primary;
+}
+
+// Utility classes
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.text-gradient {
+    .text-gradient();
+}
+
+.flex-center {
+    .flex-center();
+}
+
+.flex-between {
+    .flex-between();
+}
+
+.fade-in {
+    .fade-in();
+}
+
+.slide-up {
+    .slide-up();
+}
+
+.spinner {
+    .spinner();
+}
+
+// Responsive utilities
+@media (max-width: @screen-sm) {
+    .hide-mobile {
+        display: none !important;
+    }
+}
+
+@media (min-width: @screen-md) {
+    .hide-desktop {
+        display: none !important;
+    }
+}

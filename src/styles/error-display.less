@@ -1,0 +1,41 @@
+@import 'variables.less';
+@import 'mixins.less';
+
+// Error Display Styles
+.error-display {
+    .status-danger();
+    border-radius: @radius-lg;
+    padding: @spacing-lg;
+    text-align: center;
+
+    &__icon {
+        color: @color-danger;
+        margin-bottom: @spacing-sm;
+
+        svg {
+            width: 48px;
+            height: 48px;
+            margin: 0 auto @spacing-md;
+        }
+    }
+
+    &__title {
+        font-size: 18px;
+        font-weight: 600;
+        color: #fca5a5;
+        margin-bottom: @spacing-sm;
+    }
+
+    &__message {
+        color: #fecaca;
+        margin-bottom: @spacing-md;
+    }
+
+    &__retry-btn {
+        .btn-danger();
+
+        &:hover {
+            transform: scale(1.05);
+        }
+    }
+}
