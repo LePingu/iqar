@@ -3,6 +3,8 @@ import { useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { api } from '../services/api';
 import type { BacktestConfig } from '../types/api';
+import { GlassCard } from '../components/GlassCard';
+import { FlagChip } from '../components/FlagChip';
 
 const DEFAULT_CONFIG: BacktestConfig = {
   initial_capital: 10000,
@@ -26,7 +28,23 @@ const DEFAULT_CONFIG: BacktestConfig = {
   regime_continuous_enabled: true,
   position_rotation_enabled: true,
   mock_critic: false,
+  anti_averaging_down_enabled: true,
+  vol_trail_enabled: false,
+  vol_trail_multiplier: 1.0,
+  vol_trail_floor: 0.02,
+  vol_trail_ceiling: 0.15,
 };
+
+const FLAG_DEFINITIONS = [
+  { key: 'fixed_universe_enabled' as const, label: 'Fixed Universe' },
+  { key: 'dual_portfolio_enabled' as const, label: 'Dual Portfolio' },
+  { key: 'regime_continuous_enabled' as const, label: 'Regime Continuous' },
+  { key: 'position_rotation_enabled' as const, label: 'Position Rotation' },
+  { key: 'disable_ai_exits' as const, label: 'Disable AI Exits' },
+  { key: 'mock_critic' as const, label: 'Mock Critic' },
+  { key: 'anti_averaging_down_enabled' as const, label: 'Anti Avg Down' },
+  { key: 'vol_trail_enabled' as const, label: 'Vol Trail' },
+];
 
 export function ControlTower() {
   const navigate = useNavigate();
@@ -40,10 +58,9 @@ export function ControlTower() {
 
   const launchMutation = useMutation({
     mutationFn: (newConfig: BacktestConfig) => api.launchBacktest(newConfig),
-    onSuccess: (data) => {
-      if (data.job_id) {
-        navigate({ to: '/backtests/jobs/$jobId', params: { jobId: data.job_id } });
-      }
+    onSuccess: () => {
+      // Navigate to live monitor — auto-resolve will pick up the new run
+      navigate({ to: '/backtests/live' });
     },
   });
 
@@ -72,8 +89,8 @@ export function ControlTower() {
 
   return (
     <div className="animate-fade-in grid gap-8 md:grid-cols-2">
-      <div className="glass-panel">
-        <h2 className="text-gold text-2xl mb-6">System Status</h2>
+      <GlassCard>
+        <h2 className="text-[var(--color-gold-accent)] font-display font-semibold text-2xl mb-6">System Status</h2>
         <div className="space-y-4">
           <div className="flex justify-between items-center border-b border-white/5 pb-2">
             <span className="text-gray-400">Rust Core</span>
@@ -104,21 +121,21 @@ export function ControlTower() {
             <span className="text-blue-400 font-mono">{status?.database_size_mb || 0} MB</span>
           </div>
         </div>
-      </div>
-      
-      <div className="glass-panel">
-        <h2 className="text-gold text-2xl mb-6">Launch Backtest</h2>
+      </GlassCard>
+
+      <GlassCard>
+        <h2 className="text-[var(--color-gold-accent)] font-display font-semibold text-2xl mb-6">Launch Backtest</h2>
         <div className="flex gap-2 mb-6">
           <button type="button" onClick={() => handlePreset('bull')} className="px-3 py-1 bg-emerald-500/20 text-emerald-400 rounded hover:bg-emerald-500/30 transition-colors text-sm">Bull Preset</button>
           <button type="button" onClick={() => handlePreset('bear')} className="px-3 py-1 bg-rose-500/20 text-rose-400 rounded hover:bg-rose-500/30 transition-colors text-sm">Bear Preset</button>
           <button type="button" onClick={() => handlePreset('sideways')} className="px-3 py-1 bg-blue-500/20 text-blue-400 rounded hover:bg-blue-500/30 transition-colors text-sm">Sideways Preset</button>
         </div>
-        
+
         <form onSubmit={handleLaunch} className="flex flex-col gap-5">
           <label className="flex flex-col gap-2 text-sm text-gray-300">
             Initial Capital (USD)
-            <input 
-              type="number" 
+            <input
+              type="number"
               value={config.initial_capital}
               onChange={e => setConfig({ ...config, initial_capital: Number(e.target.value) })}
               className="bg-[var(--color-dark-bg)] border border-[var(--color-dark-border)] text-white p-3 rounded-lg focus:border-[var(--color-gold-accent)] focus:ring-1 focus:ring-[var(--color-gold-accent)] outline-none transition-all"
@@ -134,42 +151,66 @@ export function ControlTower() {
               <input type="date" value={config.end_date} onChange={e => setConfig({ ...config, end_date: e.target.value })} className="bg-[var(--color-dark-bg)] border border-[var(--color-dark-border)] text-white p-3 rounded-lg focus:border-[var(--color-gold-accent)] outline-none" />
             </label>
           </div>
-          
+
           <div className="flex flex-col gap-2 mt-2">
             <span className="text-sm text-gray-300">Configuration Flags</span>
             <div className="flex flex-wrap gap-2">
-              {[
-                { key: 'fixed_universe_enabled', label: 'Fixed Universe' },
-                { key: 'dual_portfolio_enabled', label: 'Dual Portfolio' },
-                { key: 'regime_continuous_enabled', label: 'Regime Continuous' },
-                { key: 'position_rotation_enabled', label: 'Position Rotation' },
-                { key: 'disable_ai_exits', label: 'Disable AI Exits' },
-                { key: 'mock_critic', label: 'Mock Critic' },
-              ].map(flag => {
-                const isActive = config[flag.key as keyof BacktestConfig];
-                return (
-                  <button
-                    key={flag.key}
-                    type="button"
-                    onClick={() => toggleFlag(flag.key as keyof BacktestConfig)}
-                    className={`px-3 py-1.5 rounded-full text-xs transition-colors border ${isActive ? 'bg-[var(--color-gold-accent)]/20 text-[var(--color-gold-accent)] border-[var(--color-gold-accent)]/50' : 'bg-transparent text-gray-400 border-gray-600 hover:border-gray-400'}`}
-                  >
-                    {flag.label}
-                  </button>
-                )
-              })}
+              {FLAG_DEFINITIONS.map(flag => (
+                <FlagChip
+                  key={flag.key}
+                  label={flag.label}
+                  active={!!config[flag.key]}
+                  onClick={() => toggleFlag(flag.key)}
+                />
+              ))}
             </div>
           </div>
-          
-          <button 
-            type="submit" 
+
+          {/* Vol Trail Parameters — shown only when vol_trail_enabled is on */}
+          {config.vol_trail_enabled && (
+            <div className="grid grid-cols-3 gap-4 mt-2 p-3 bg-white/5 rounded-xl border border-white/10">
+              <label className="flex flex-col gap-1 text-xs text-gray-400">
+                Multiplier
+                <input
+                  type="number"
+                  step="0.1"
+                  value={config.vol_trail_multiplier}
+                  onChange={e => setConfig({ ...config, vol_trail_multiplier: Number(e.target.value) })}
+                  className="bg-[var(--color-dark-bg)] border border-[var(--color-dark-border)] text-white px-3 py-1.5 rounded-lg text-sm focus:border-[var(--color-gold-accent)] outline-none"
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-xs text-gray-400">
+                Floor (min %)
+                <input
+                  type="number"
+                  step="0.01"
+                  value={config.vol_trail_floor}
+                  onChange={e => setConfig({ ...config, vol_trail_floor: Number(e.target.value) })}
+                  className="bg-[var(--color-dark-bg)] border border-[var(--color-dark-border)] text-white px-3 py-1.5 rounded-lg text-sm focus:border-[var(--color-gold-accent)] outline-none"
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-xs text-gray-400">
+                Ceiling (max %)
+                <input
+                  type="number"
+                  step="0.01"
+                  value={config.vol_trail_ceiling}
+                  onChange={e => setConfig({ ...config, vol_trail_ceiling: Number(e.target.value) })}
+                  className="bg-[var(--color-dark-bg)] border border-[var(--color-dark-border)] text-white px-3 py-1.5 rounded-lg text-sm focus:border-[var(--color-gold-accent)] outline-none"
+                />
+              </label>
+            </div>
+          )}
+
+          <button
+            type="submit"
             disabled={launchMutation.isPending}
             className="mt-4 btn-gold disabled:opacity-50"
           >
             {launchMutation.isPending ? 'Launching...' : 'Execute Backtest'}
           </button>
         </form>
-      </div>
+      </GlassCard>
     </div>
   );
 }

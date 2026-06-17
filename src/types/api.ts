@@ -38,6 +38,11 @@ export interface BacktestConfig {
   regime_continuous_enabled: boolean;
   position_rotation_enabled: boolean;
   mock_critic: boolean;
+  anti_averaging_down_enabled: boolean;
+  vol_trail_enabled: boolean;
+  vol_trail_multiplier: number;
+  vol_trail_floor: number;
+  vol_trail_ceiling: number;
 }
 
 export interface Metrics {
@@ -221,4 +226,20 @@ export interface LiveBacktestDetail {
   recent_fills: LiveFill[];
   equity_curve: EquityPoint[];
   portfolio_metrics: Metrics | null;
+}
+
+export interface EngineStatus {
+  session_id: string;
+  trading_enabled: boolean;
+  engine_alive: boolean;
+  max_position_size_pct: number;
+  max_daily_loss_pct: number;
+  max_open_positions: number;
+  last_snapshot_ts: string | null;
+}
+
+export interface EngineControls {
+  max_position_size_pct?: number | null;
+  max_daily_loss_pct?: number | null;
+  max_open_positions?: number | null;
 }

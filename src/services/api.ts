@@ -9,6 +9,8 @@ import type {
   AssetSummary,
   ChartData,
   LiveBacktestDetail,
+  EngineStatus,
+  EngineControls,
 } from '../types/api';
 
 const API_BASE = '/api';
@@ -52,18 +54,31 @@ export const api = {
   getBacktestAssets: (runId: string) =>
     fetchJson<AssetSummary[]>(`/backtests/${runId}/assets`),
 
-  getChartData: (runId: string, symbol: string, window: number = 60) => 
-    fetchJson<ChartData>(`/backtests/${runId}/charts/${symbol}?window=${window}`),
+  getChartData: (runId: string, symbol: string) =>
+    fetchJson<ChartData>(`/backtests/${runId}/charts/${symbol}`),
 
-  // SSE Stream helper
-  createJobStream: (jobId: string) => {
-    return new EventSource(`${API_BASE}/backtests/jobs/${jobId}/stream`);
-  },
-
-  // Live (Placeholders for now)
-  getLivePositions: () => fetchJson<unknown>('/live/positions'),
-  getLiveMetrics: () => fetchJson<unknown>('/live/metrics'),
-
+  // Live backtest monitoring
   getLiveBacktestActive: () => fetchJson<LiveBacktestDetail>('/backtests/live'),
   getLiveBacktest: (runId: string) => fetchJson<LiveBacktestDetail>(`/backtests/live/${runId}`),
+
+  // Engine control (Route E)
+  getEngineStatus: (sessionId: string) =>
+    fetchJson<EngineStatus>(`/engine/${sessionId}/status`),
+
+  haltEngine: (sessionId: string) =>
+    fetchJson<{ queued: string; session_id: string }>(`/engine/${sessionId}/halt`, {
+      method: 'POST',
+    }),
+
+  resumeEngine: (sessionId: string) =>
+    fetchJson<{ queued: string; session_id: string }>(`/engine/${sessionId}/resume`, {
+      method: 'POST',
+    }),
+
+  updateEngineControls: (sessionId: string, controls: EngineControls) =>
+    fetchJson<{ queued: string; session_id: string; payload: object }>(`/engine/${sessionId}/controls`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(controls),
+    }),
 };
