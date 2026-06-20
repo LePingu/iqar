@@ -23,8 +23,8 @@ export function LiveRunMonitor() {
         return runId
           ? await api.getLiveBacktest(runId)
           : await api.getLiveBacktestActive();
-      } catch (e: any) {
-        if (e.message?.includes('404')) return null;
+      } catch (e: unknown) {
+        if (e instanceof Error && e.message.includes('404')) return null;
         throw e;
       }
     },
@@ -47,7 +47,7 @@ export function LiveRunMonitor() {
       }, 3000);
       return () => clearTimeout(timer);
     }
-  }, [data?.is_active, data?.portfolio_metrics, data?.run_id, navigate]);
+  }, [data, navigate]);
 
   if (isLoading) {
     return (

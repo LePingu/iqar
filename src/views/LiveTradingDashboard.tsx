@@ -7,7 +7,7 @@ import { LiveKPIStrip } from '../components/LiveKPIStrip';
 import { LiveEquityCurve } from '../components/LiveEquityCurve';
 import { OpenPositionsTable } from '../components/OpenPositionsTable';
 import { RecentFillsFeed } from '../components/RecentFillsFeed';
-import type { EngineControls } from '../types/api';
+import type { EngineControls, EngineStatus } from '../types/api';
 
 const DEFAULT_SESSION_ID = 'live-paper';
 
@@ -107,8 +107,8 @@ export function LiveTradingDashboard() {
     queryFn: async () => {
       try {
         return await api.getEngineStatus(sessionId);
-      } catch (e: any) {
-        if (e.message?.includes('404')) return null; // Engine never started
+      } catch (e: unknown) {
+        if (e instanceof Error && e.message.includes('404')) return null; // Engine never started
         throw e;
       }
     },
@@ -136,7 +136,7 @@ export function LiveTradingDashboard() {
       // Optimistic update
       await queryClient.cancelQueries({ queryKey: ['engineStatus', sessionId] });
       const prev = queryClient.getQueryData(['engineStatus', sessionId]);
-      queryClient.setQueryData(['engineStatus', sessionId], (old: any) =>
+      queryClient.setQueryData(['engineStatus', sessionId], (old: EngineStatus | undefined) =>
         old ? { ...old, trading_enabled: false } : old
       );
       return { prev };
@@ -155,7 +155,7 @@ export function LiveTradingDashboard() {
     onMutate: async () => {
       await queryClient.cancelQueries({ queryKey: ['engineStatus', sessionId] });
       const prev = queryClient.getQueryData(['engineStatus', sessionId]);
-      queryClient.setQueryData(['engineStatus', sessionId], (old: any) =>
+      queryClient.setQueryData(['engineStatus', sessionId], (old: EngineStatus | undefined) =>
         old ? { ...old, trading_enabled: true } : old
       );
       return { prev };
