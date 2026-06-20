@@ -1,0 +1,60 @@
+name: Test, Build, and Push
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  test:
+    name: Test and Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          # Using latest LTS for the actions runner; Docker build uses 25.4-alpine
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Linter
+        run: npm run lint
+
+      - name: Test Build
+        run: npm run build
+
+  build-and-push:
+    name: Build and Push Docker Image
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Log in to Scaleway Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: rg.fr-par.scw.cloud
+          # Scaleway container registry uses 'nologin' as the username and the secret key as the password
+          username: nologin
+          password: ${{ secrets.SCW_SECRET_KEY }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          # We use the SCW_REGISTRY_NAMESPACE secret to dynamically form the registry path
+          tags: rg.fr-par.scw.cloud/${{ secrets.SCW_REGISTRY_NAMESPACE }}/iqar:latest
+          # Optional: Use GitHub Actions cache to speed up Docker builds
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
