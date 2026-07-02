@@ -4,6 +4,7 @@ import { api } from '../services/api';
 import { formatCurrency, formatPercentage } from '../utils/trading';
 import { GlassCard } from '../components/GlassCard';
 import { StatusBadge } from '../components/StatusBadge';
+import { KPICard } from '../components/KPICard';
 
 export function JobMonitor() {
   const { jobId } = useParams({ strict: false });
@@ -15,7 +16,6 @@ export function JobMonitor() {
     queryFn: () => api.getJobStatus(jobId as string),
     enabled: !!jobId,
     refetchInterval: (query) => {
-      // Stop polling once completed or failed
       const status = query.state.data?.status;
       if (status === 'completed' || status === 'failed') return false;
       return 2500;
@@ -57,47 +57,47 @@ export function JobMonitor() {
   const snapshot = liveData?.snapshot;
 
   return (
-    <div className="animate-fade-in flex flex-col gap-8">
+    <div className="animate-fade-in flex flex-col gap-4">
       {/* Header */}
-      <div className="flex justify-between items-center bg-white/5 p-4 rounded-xl border border-white/10">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 card">
         <div>
-          <h2 className="text-[var(--color-gold-accent)] font-display font-semibold text-2xl font-light">Job Monitor</h2>
-          <div className="text-sm font-mono text-gray-500 mt-1">{jobId}</div>
+          <h2 className="page-title">Job Monitor</h2>
+          <div className="text-sm font-mono text-[var(--color-text-muted)] mt-1">{jobId}</div>
         </div>
-        <div className="flex items-center gap-3">
-          <span className="text-gray-400 text-sm">Status:</span>
+        <div className="flex items-center gap-2">
+          <span className="text-[var(--color-text-muted)] text-sm">Status:</span>
           <StatusBadge variant={statusVariant} label={jobStatus?.status?.toUpperCase()} />
         </div>
       </div>
 
       {error && (
-        <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 p-4 rounded-xl">
+        <div className="card bg-[var(--color-red-muted)] border-red-500/20 text-negative text-sm">
           <span className="font-bold">Error:</span> Failed to fetch job status.
         </div>
       )}
 
       {jobStatus?.error && (
-        <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 p-4 rounded-xl">
+        <div className="card bg-[var(--color-red-muted)] border-red-500/20 text-negative text-sm">
           <span className="font-bold">Job Error:</span> {jobStatus.error}
         </div>
       )}
 
       {jobStatus?.status === 'completed' && (
-        <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 p-4 rounded-xl text-center">
-          <span className="font-bold">Run Complete!</span> Redirecting to results...
+        <div className="card bg-[var(--color-green-muted)] border-green-500/20 text-positive text-center text-sm">
+          <span className="font-bold">Run Complete!</span> Redirecting to results…
         </div>
       )}
 
       {/* Progress Bar */}
       {jobStatus?.status === 'running' && (
         <div className="shrink-0">
-          <div className="flex justify-between text-xs text-gray-400 mb-2">
+          <div className="flex justify-between text-xs text-[var(--color-text-muted)] mb-1.5">
             <span>Progress</span>
             <span>{progressPct.toFixed(1)}%</span>
           </div>
-          <div className="h-2 bg-white/5 rounded-full overflow-hidden border border-white/10">
+          <div className="h-1.5 bg-[var(--color-bg-elevated)] rounded-full overflow-hidden border border-[var(--color-border)]">
             <div
-              className="h-full bg-gradient-to-r from-[var(--color-gold-dim)] to-[var(--color-gold-accent)] rounded-full transition-all duration-500"
+              className="h-full bg-[var(--color-gold-accent)] rounded-full transition-all duration-500"
               style={{ width: `${Math.min(progressPct, 100)}%` }}
             />
           </div>
@@ -106,43 +106,27 @@ export function JobMonitor() {
 
       {/* Rolling Metrics from live data */}
       {snapshot && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <GlassCard className="p-4 flex flex-col justify-center">
-            <span className="text-xs text-gray-400 uppercase tracking-wider mb-1">Portfolio Value</span>
-            <span className="text-xl font-bold font-mono text-white">
-              {formatCurrency(snapshot.portfolio_value)}
-            </span>
-          </GlassCard>
-          <GlassCard className="p-4 flex flex-col justify-center">
-            <span className="text-xs text-gray-400 uppercase tracking-wider mb-1">P&L</span>
-            <span className={`text-xl font-bold font-mono ${snapshot.pnl >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-              {snapshot.pnl >= 0 ? '+' : ''}{formatCurrency(snapshot.pnl)} ({formatPercentage(snapshot.pnl_pct)})
-            </span>
-          </GlassCard>
-          <GlassCard className="p-4 flex flex-col justify-center">
-            <span className="text-xs text-gray-400 uppercase tracking-wider mb-1">Open Positions</span>
-            <span className="text-xl font-bold font-mono text-blue-400">
-              {snapshot.open_positions_count}
-            </span>
-          </GlassCard>
-          <GlassCard className="p-4 flex flex-col justify-center">
-            <span className="text-xs text-gray-400 uppercase tracking-wider mb-1">Decisions</span>
-            <span className="text-xl font-bold font-mono text-white">
-              {snapshot.decisions_done} / {snapshot.decisions_target}
-            </span>
-          </GlassCard>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <KPICard label="Portfolio Value" value={formatCurrency(snapshot.portfolio_value)} neutral />
+          <KPICard
+            label="P&L"
+            value={`${snapshot.pnl >= 0 ? '+' : ''}${formatCurrency(snapshot.pnl)} (${formatPercentage(snapshot.pnl_pct)})`}
+            isPositive={snapshot.pnl >= 0}
+          />
+          <KPICard label="Open Positions" value={snapshot.open_positions_count} neutral />
+          <KPICard label="Decisions" value={`${snapshot.decisions_done} / ${snapshot.decisions_target}`} neutral />
         </div>
       )}
 
       {!snapshot && jobStatus?.status === 'running' && (
         <GlassCard className="flex items-center justify-center py-12">
-          <p className="text-gray-500 animate-pulse">Waiting for first decision...</p>
+          <p className="text-[var(--color-text-muted)] animate-pulse text-sm">Waiting for first decision…</p>
         </GlassCard>
       )}
 
       {!jobStatus && !error && (
         <GlassCard className="flex items-center justify-center py-12">
-          <p className="text-gray-400 animate-pulse">Connecting to job...</p>
+          <p className="text-[var(--color-text-muted)] animate-pulse text-sm">Connecting to job…</p>
         </GlassCard>
       )}
     </div>

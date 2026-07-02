@@ -107,16 +107,24 @@ export function CandlestickExplorer({ runId, symbol }: Props) {
     const chart = createChart(chartContainerRef.current, {
       layout: {
         background: { color: 'transparent' },
-        textColor: '#9CA3AF',
+        textColor: '#6B7280',
+        fontFamily: "'Roboto Mono', monospace",
+        fontSize: 11,
       },
       grid: {
-        vertLines: { color: 'rgba(255, 255, 255, 0.05)' },
-        horzLines: { color: 'rgba(255, 255, 255, 0.05)' },
+        vertLines: { color: 'rgba(255, 255, 255, 0.03)' },
+        horzLines: { color: 'rgba(255, 255, 255, 0.03)' },
       },
       width: chartContainerRef.current.clientWidth,
       height: 600,
       timeScale: {
         timeVisible: true,
+        borderVisible: false,
+      },
+      rightPriceScale: { borderVisible: false },
+      crosshair: {
+        vertLine: { color: 'rgba(212, 168, 67, 0.3)', labelBackgroundColor: '#1A1E26' },
+        horzLine: { color: 'rgba(212, 168, 67, 0.3)', labelBackgroundColor: '#1A1E26' },
       },
     });
 
@@ -195,16 +203,16 @@ export function CandlestickExplorer({ runId, symbol }: Props) {
     };
   }, [data]);
 
-  if (isLoading) return <div className="h-full flex items-center justify-center text-gray-400">Loading chart data for {symbol}...</div>;
-  if (error || !data) return <div className="h-full flex items-center justify-center text-rose-500">Failed to load chart data.</div>;
+  if (isLoading) return <div className="h-full flex items-center justify-center text-[var(--color-text-muted)] text-sm">Loading chart data for {symbol}…</div>;
+  if (error || !data) return <div className="h-full flex items-center justify-center text-negative text-sm">Failed to load chart data.</div>;
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="text-[var(--color-gold-accent)] font-display font-semibold text-xl">{symbol} Candlestick Explorer</h3>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-4">
+        <h3 className="page-title text-lg">{symbol} Candlestick Explorer</h3>
         {/* Regime band legend */}
         {data.regime_bands && data.regime_bands.length > 0 && (
-          <div className="flex items-center gap-3 text-xs text-gray-400">
+          <div className="flex items-center gap-3 text-xs text-[var(--color-text-muted)]">
             <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm inline-block" style={{ backgroundColor: 'rgba(212, 175, 55, 0.3)' }}></span> Trend Up</span>
             <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm inline-block" style={{ backgroundColor: 'rgba(156, 163, 175, 0.3)' }}></span> Sideways</span>
             <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm inline-block" style={{ backgroundColor: 'rgba(244, 63, 94, 0.3)' }}></span> Trend Down</span>

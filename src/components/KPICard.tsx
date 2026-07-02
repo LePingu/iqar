@@ -8,15 +8,15 @@ interface KPICardProps {
 
 export function KPICard({ label, value, isPositive = true, neutral = false, className = '' }: KPICardProps) {
   const valueColor = neutral
-    ? 'text-white'
+    ? 'text-[var(--color-text-primary)]'
     : isPositive
-      ? 'text-emerald-500'
-      : 'text-rose-500';
+      ? 'text-positive'
+      : 'text-negative';
 
   return (
-    <div className={`bg-gradient-to-br from-[var(--color-dark-panel)] to-[#141414] border border-[var(--color-dark-border)] shadow-2xl rounded-3xl p-4 flex flex-col items-center justify-center text-center ${className}`}>
-      <span className="text-xs text-gray-400 uppercase tracking-wider mb-1">{label}</span>
-      <span className={`text-xl font-bold ${valueColor}`}>{value}</span>
+    <div className={`card flex flex-col gap-1 ${className}`}>
+      <span className="section-title !mb-0">{label}</span>
+      <span className={`text-lg font-bold font-mono ${valueColor}`}>{value}</span>
     </div>
   );
 }

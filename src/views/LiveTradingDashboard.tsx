@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
+import { useRole } from '../contexts/RoleContext';
 import { GlassCard } from '../components/GlassCard';
 import { StatusBadge } from '../components/StatusBadge';
 import { LiveKPIStrip } from '../components/LiveKPIStrip';
@@ -49,8 +50,8 @@ function RiskLimitsForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex items-end gap-4 flex-wrap">
-      <label className="flex flex-col gap-1 text-xs text-gray-400">
+    <form onSubmit={handleSubmit} className="flex items-end gap-3 flex-wrap">
+      <label className="flex flex-col gap-1 text-xs text-[var(--color-text-muted)]">
         Max Pos Size %
         <input
           type="number"
@@ -59,10 +60,10 @@ function RiskLimitsForm({
           max="1"
           value={values.maxPositionSizePct}
           onChange={e => setValues({ ...values, maxPositionSizePct: Number(e.target.value) })}
-          className="bg-[var(--color-dark-bg)] border border-[var(--color-dark-border)] text-white px-3 py-1.5 rounded-lg text-sm focus:border-[var(--color-gold-accent)] outline-none transition-all w-24"
+          className="input w-24"
         />
       </label>
-      <label className="flex flex-col gap-1 text-xs text-gray-400">
+      <label className="flex flex-col gap-1 text-xs text-[var(--color-text-muted)]">
         Daily Loss %
         <input
           type="number"
@@ -71,10 +72,10 @@ function RiskLimitsForm({
           max="1"
           value={values.maxDailyLossPct}
           onChange={e => setValues({ ...values, maxDailyLossPct: Number(e.target.value) })}
-          className="bg-[var(--color-dark-bg)] border border-[var(--color-dark-border)] text-white px-3 py-1.5 rounded-lg text-sm focus:border-[var(--color-gold-accent)] outline-none transition-all w-24"
+          className="input w-24"
         />
       </label>
-      <label className="flex flex-col gap-1 text-xs text-gray-400">
+      <label className="flex flex-col gap-1 text-xs text-[var(--color-text-muted)]">
         Max Positions
         <input
           type="number"
@@ -82,22 +83,20 @@ function RiskLimitsForm({
           min="1"
           value={values.maxOpenPositions}
           onChange={e => setValues({ ...values, maxOpenPositions: Number(e.target.value) })}
-          className="bg-[var(--color-dark-bg)] border border-[var(--color-dark-border)] text-white px-3 py-1.5 rounded-lg text-sm focus:border-[var(--color-gold-accent)] outline-none transition-all w-24"
+          className="input w-24"
         />
       </label>
-      <button
-        type="submit"
-        disabled={mutation.isPending}
-        className="px-4 py-1.5 text-sm rounded-lg bg-[var(--color-gold-accent)]/20 text-[var(--color-gold-accent)] border border-[var(--color-gold-accent)]/30 hover:bg-[var(--color-gold-accent)]/30 transition-colors disabled:opacity-50"
-      >
-        {mutation.isPending ? 'Saving...' : 'Update Limits'}
+      <button type="submit" disabled={mutation.isPending} className="btn btn-ghost text-xs">
+        {mutation.isPending ? 'Saving…' : 'Update Limits'}
       </button>
-      {mutation.isSuccess && <span className="text-emerald-400 text-xs">✓ Queued</span>}
+      {mutation.isSuccess && <span className="text-positive text-xs">✓ Queued</span>}
     </form>
   );
 }
 
 export function LiveTradingDashboard() {
+  const { role } = useRole();
+  const isAdmin = role === 'admin';
   const sessionId = DEFAULT_SESSION_ID;
   const queryClient = useQueryClient();
 
@@ -108,7 +107,7 @@ export function LiveTradingDashboard() {
       try {
         return await api.getEngineStatus(sessionId);
       } catch (e: unknown) {
-        if (e instanceof Error && e.message.includes('404')) return null; // Engine never started
+        if (e instanceof Error && e.message.includes('404')) return null;
         throw e;
       }
     },
@@ -133,7 +132,6 @@ export function LiveTradingDashboard() {
   const haltMutation = useMutation({
     mutationFn: () => api.haltEngine(sessionId),
     onMutate: async () => {
-      // Optimistic update
       await queryClient.cancelQueries({ queryKey: ['engineStatus', sessionId] });
       const prev = queryClient.getQueryData(['engineStatus', sessionId]);
       queryClient.setQueryData(['engineStatus', sessionId], (old: EngineStatus | undefined) =>
@@ -170,18 +168,18 @@ export function LiveTradingDashboard() {
 
   if (engineLoading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <p className="text-gray-400 animate-pulse">Connecting to engine...</p>
+      <div className="flex items-center justify-center h-64">
+        <p className="text-[var(--color-text-muted)] text-sm animate-pulse">Connecting to engine…</p>
       </div>
     );
   }
 
   if (engineError && !engineStatus) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 p-4 rounded-xl max-w-md">
-          <span className="font-bold">Error:</span> Failed to connect to engine status endpoint.
-        </div>
+      <div className="flex items-center justify-center h-64">
+        <GlassCard className="max-w-md text-center">
+          <p className="text-negative font-medium">Failed to connect to engine status endpoint.</p>
+        </GlassCard>
       </div>
     );
   }
@@ -189,15 +187,18 @@ export function LiveTradingDashboard() {
   // Engine never started
   if (!engineStatus) {
     return (
-      <div className="animate-fade-in flex flex-col items-center justify-center h-full py-20">
+      <div className="animate-fade-in flex flex-col items-center justify-center h-64">
         <GlassCard className="text-center max-w-lg w-full">
-          <h2 className="text-[var(--color-gold-accent)] font-display font-semibold text-2xl mb-4">Engine Not Started</h2>
-          <p className="text-gray-400 mb-6">
-            No engine session found for <span className="font-mono text-white">{sessionId}</span>. Start the engine with:
+          <h2 className="page-title mb-3">Engine Not Started</h2>
+          <p className="text-[var(--color-text-secondary)] mb-4">
+            No engine session found for <span className="font-mono text-[var(--color-text-primary)]">{sessionId}</span>.
+            {isAdmin && ' Start the engine with:'}
           </p>
-          <div className="bg-[var(--color-dark-bg)] border border-[var(--color-dark-border)] rounded-xl p-4 font-mono text-sm text-gray-200 text-left">
-            ./scripts/launch-engine.sh --session={sessionId} --capital=10000
-          </div>
+          {isAdmin && (
+            <div className="bg-[var(--color-bg-root)] border border-[var(--color-border)] rounded-lg p-3 font-mono text-sm text-[var(--color-text-secondary)] text-left">
+              ./scripts/launch-engine.sh --session={sessionId} --capital=10000
+            </div>
+          )}
         </GlassCard>
       </div>
     );
@@ -205,61 +206,91 @@ export function LiveTradingDashboard() {
 
   const engineAlive = engineStatus.engine_alive;
   const tradingEnabled = engineStatus.trading_enabled;
-
-  // Determine badge variant
   const badgeVariant = !engineAlive ? 'down' : tradingEnabled ? 'trading' : 'halted';
 
   return (
-    <div className="animate-fade-in flex flex-col gap-6">
+    <div className="animate-fade-in flex flex-col gap-4">
+      {/* Read-only indicator for readers */}
+      {!isAdmin && (
+        <div className="badge bg-[var(--color-blue-muted)] text-[var(--color-blue)] self-start">
+          Read-Only Mode
+        </div>
+      )}
+
       {/* Engine Control Panel */}
       <GlassCard>
         <div className="flex flex-col gap-4">
-          <div className="flex justify-between items-start">
+          <div className="flex flex-col sm:flex-row justify-between items-start gap-3">
             <div>
-              <h2 className="text-[var(--color-gold-accent)] font-display font-semibold text-2xl mb-1">Live Trading Engine</h2>
-              <div className="text-sm font-mono text-gray-500">Session: {sessionId}</div>
+              <h2 className="page-title">Live Trading Engine</h2>
+              <div className="text-sm font-mono text-[var(--color-text-muted)] mt-1">Session: {sessionId}</div>
             </div>
-            <div className="flex flex-col items-end gap-2">
+            <div className="flex flex-col items-start sm:items-end gap-1.5">
               <StatusBadge variant={badgeVariant} />
-              <span className="text-xs text-gray-500">
+              <span className="text-xs text-[var(--color-text-muted)]">
                 Last heartbeat: {formatRelativeTime(engineStatus.last_snapshot_ts)}
               </span>
             </div>
           </div>
 
-          {/* Halt / Resume buttons */}
-          <div className="flex gap-3">
-            {tradingEnabled ? (
-              <button
-                onClick={() => haltMutation.mutate()}
-                disabled={!engineAlive || haltMutation.isPending}
-                className="px-6 py-2 rounded-full text-sm font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30 hover:bg-rose-500/30 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-              >
-                {haltMutation.isPending ? 'Halting...' : '⏸ Halt Trading'}
-              </button>
-            ) : (
-              <button
-                onClick={() => resumeMutation.mutate()}
-                disabled={!engineAlive || resumeMutation.isPending}
-                className="px-6 py-2 rounded-full text-sm font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-              >
-                {resumeMutation.isPending ? 'Resuming...' : '▶ Resume Trading'}
-              </button>
-            )}
-          </div>
+          {/* Halt / Resume buttons — admin only */}
+          {isAdmin && (
+            <div className="flex gap-3">
+              {tradingEnabled ? (
+                <button
+                  onClick={() => haltMutation.mutate()}
+                  disabled={!engineAlive || haltMutation.isPending}
+                  className="btn btn-danger"
+                >
+                  {haltMutation.isPending ? 'Halting…' : '⏸ Halt Trading'}
+                </button>
+              ) : (
+                <button
+                  onClick={() => resumeMutation.mutate()}
+                  disabled={!engineAlive || resumeMutation.isPending}
+                  className="btn btn-success"
+                >
+                  {resumeMutation.isPending ? 'Resuming…' : '▶ Resume Trading'}
+                </button>
+              )}
+            </div>
+          )}
 
-          {/* Risk Limits */}
-          <div className="border-t border-white/5 pt-4">
-            <h4 className="text-xs text-gray-400 uppercase tracking-wider mb-3">Risk Limits</h4>
-            <RiskLimitsForm
-              initialValues={{
-                maxPositionSizePct: engineStatus.max_position_size_pct,
-                maxDailyLossPct: engineStatus.max_daily_loss_pct,
-                maxOpenPositions: engineStatus.max_open_positions,
-              }}
-              sessionId={sessionId}
-            />
-          </div>
+          {/* Risk Limits — admin only */}
+          {isAdmin && (
+            <div className="border-t border-[var(--color-border)] pt-4">
+              <h4 className="section-title">Risk Limits</h4>
+              <RiskLimitsForm
+                initialValues={{
+                  maxPositionSizePct: engineStatus.max_position_size_pct,
+                  maxDailyLossPct: engineStatus.max_daily_loss_pct,
+                  maxOpenPositions: engineStatus.max_open_positions,
+                }}
+                sessionId={sessionId}
+              />
+            </div>
+          )}
+
+          {/* Risk limits display — reader */}
+          {!isAdmin && (
+            <div className="border-t border-[var(--color-border)] pt-4">
+              <h4 className="section-title">Risk Limits</h4>
+              <div className="flex gap-6 text-sm">
+                <div>
+                  <span className="text-[var(--color-text-muted)]">Max Pos Size:</span>{' '}
+                  <span className="font-mono text-[var(--color-text-primary)]">{(engineStatus.max_position_size_pct * 100).toFixed(0)}%</span>
+                </div>
+                <div>
+                  <span className="text-[var(--color-text-muted)]">Daily Loss:</span>{' '}
+                  <span className="font-mono text-[var(--color-text-primary)]">{(engineStatus.max_daily_loss_pct * 100).toFixed(0)}%</span>
+                </div>
+                <div>
+                  <span className="text-[var(--color-text-muted)]">Max Positions:</span>{' '}
+                  <span className="font-mono text-[var(--color-text-primary)]">{engineStatus.max_open_positions}</span>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </GlassCard>
 
@@ -270,16 +301,16 @@ export function LiveTradingDashboard() {
       <LiveEquityCurve equityCurve={liveData?.equity_curve ?? []} title="Engine Equity Curve" />
 
       {/* Positions and Fills */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[400px]">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 min-h-[300px]">
         <GlassCard className={`flex flex-col ${!engineAlive ? 'opacity-40' : ''}`}>
-          <h3 className="text-[var(--color-gold-accent)] font-display font-semibold text-sm uppercase tracking-wider mb-4">Open Positions</h3>
+          <h3 className="section-title">Open Positions</h3>
           <div className="flex-1 overflow-y-auto">
             <OpenPositionsTable positions={liveData?.open_positions ?? []} />
           </div>
         </GlassCard>
 
         <GlassCard className={`flex flex-col ${!engineAlive ? 'opacity-40' : ''}`}>
-          <h3 className="text-[var(--color-gold-accent)] font-display font-semibold text-sm uppercase tracking-wider mb-4">Recent Fills</h3>
+          <h3 className="section-title">Recent Fills</h3>
           <div className="flex-1 overflow-y-auto">
             <RecentFillsFeed fills={liveData?.recent_fills ?? []} />
           </div>

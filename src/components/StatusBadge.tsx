@@ -6,14 +6,14 @@ interface StatusBadgeProps {
   className?: string;
 }
 
-const variantStyles: Record<BadgeVariant, { bg: string; text: string; border: string; pulse: boolean }> = {
-  running: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', border: 'border-emerald-500/30', pulse: true },
-  completed: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', border: 'border-emerald-500/30', pulse: false },
-  error: { bg: 'bg-rose-500/20', text: 'text-rose-400', border: 'border-rose-500/30', pulse: false },
-  connecting: { bg: 'bg-blue-500/20', text: 'text-blue-400', border: 'border-blue-500/30', pulse: true },
-  halted: { bg: 'bg-gray-500/20', text: 'text-gray-400', border: 'border-gray-500/30', pulse: false },
-  trading: { bg: 'bg-[var(--color-gold-accent)]/20', text: 'text-[var(--color-gold-accent)]', border: 'border-[var(--color-gold-accent)]/30', pulse: true },
-  down: { bg: 'bg-rose-500/20', text: 'text-rose-400', border: 'border-rose-500/30', pulse: false },
+const variantStyles: Record<BadgeVariant, { bg: string; text: string; dot?: boolean }> = {
+  running:    { bg: 'bg-[var(--color-green-muted)]',   text: 'text-[var(--color-green)]',        dot: true },
+  completed:  { bg: 'bg-[var(--color-green-muted)]',   text: 'text-[var(--color-green)]' },
+  error:      { bg: 'bg-[var(--color-red-muted)]',     text: 'text-[var(--color-red)]' },
+  connecting: { bg: 'bg-[var(--color-blue-muted)]',    text: 'text-[var(--color-blue)]',         dot: true },
+  halted:     { bg: 'bg-white/5',                      text: 'text-[var(--color-text-muted)]' },
+  trading:    { bg: 'bg-[var(--color-gold-muted)]',    text: 'text-[var(--color-gold-accent)]',  dot: true },
+  down:       { bg: 'bg-[var(--color-red-muted)]',     text: 'text-[var(--color-red)]' },
 };
 
 const defaultLabels: Record<BadgeVariant, string> = {
@@ -31,7 +31,10 @@ export function StatusBadge({ variant, label, className = '' }: StatusBadgeProps
   const displayLabel = label || defaultLabels[variant];
 
   return (
-    <span className={`px-3 py-1 ${style.bg} ${style.text} rounded-full text-sm border ${style.border} ${style.pulse ? 'animate-pulse' : ''} ${className}`}>
+    <span className={`badge ${style.bg} ${style.text} ${className}`}>
+      {style.dot && (
+        <span className={`w-1.5 h-1.5 rounded-full bg-current animate-pulse-dot`} />
+      )}
       {displayLabel}
     </span>
   );

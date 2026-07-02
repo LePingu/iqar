@@ -53,13 +53,12 @@ export function ControlTower() {
   const { data: status, isLoading: statusLoading } = useQuery({
     queryKey: ['systemStatus'],
     queryFn: api.getSystemStatus,
-    refetchInterval: 30000, // Poll every 30s
+    refetchInterval: 30000,
   });
 
   const launchMutation = useMutation({
     mutationFn: (newConfig: BacktestConfig) => api.launchBacktest(newConfig),
     onSuccess: () => {
-      // Navigate to live monitor — auto-resolve will pick up the new run
       navigate({ to: '/backtests/live' });
     },
   });
@@ -88,72 +87,72 @@ export function ControlTower() {
   };
 
   return (
-    <div className="animate-fade-in grid gap-8 md:grid-cols-2">
+    <div className="animate-fade-in grid gap-4 lg:grid-cols-2">
       <GlassCard>
-        <h2 className="text-[var(--color-gold-accent)] font-display font-semibold text-2xl mb-6">System Status</h2>
-        <div className="space-y-4">
-          <div className="flex justify-between items-center border-b border-white/5 pb-2">
-            <span className="text-gray-400">Rust Core</span>
-            {statusLoading ? (
-              <span className="text-gray-500 font-medium px-2 py-1 bg-gray-500/10 rounded">Checking</span>
-            ) : status ? (
-              <span className="text-emerald-500 font-medium px-2 py-1 bg-emerald-500/10 rounded">v{status.rust_core_version}</span>
-            ) : (
-              <span className="text-rose-500 font-medium px-2 py-1 bg-rose-500/10 rounded">Offline</span>
-            )}
-          </div>
-          <div className="flex justify-between items-center border-b border-white/5 pb-2">
-            <span className="text-gray-400">SIMD Enabled</span>
-            <span className={`font-medium px-2 py-1 rounded ${status?.rust_simd_enabled ? 'text-emerald-500 bg-emerald-500/10' : 'text-gray-500 bg-gray-500/10'}`}>
-              {status?.rust_simd_enabled ? 'True' : 'False'}
-            </span>
-          </div>
-          <div className="flex justify-between items-center border-b border-white/5 pb-2">
-            <span className="text-gray-400">Active Agents</span>
-            <span className="text-[var(--color-gold-accent)] font-bold">{status?.active_agents || 0}</span>
-          </div>
-          <div className="flex justify-between items-center border-b border-white/5 pb-2">
-            <span className="text-gray-400">LLM Latency</span>
-            <span className="text-blue-400 font-mono">{status?.llm_api_latency_ms || 0} ms</span>
-          </div>
-          <div className="flex justify-between items-center pb-2">
-            <span className="text-gray-400">DB Size</span>
-            <span className="text-blue-400 font-mono">{status?.database_size_mb || 0} MB</span>
-          </div>
+        <h2 className="page-title mb-5">System Status</h2>
+        <div className="flex flex-col gap-3">
+          {[
+            {
+              label: 'Rust Core',
+              content: statusLoading ? (
+                <span className="badge bg-white/5 text-[var(--color-text-muted)]">Checking</span>
+              ) : status ? (
+                <span className="badge bg-[var(--color-green-muted)] text-positive">v{status.rust_core_version}</span>
+              ) : (
+                <span className="badge bg-[var(--color-red-muted)] text-negative">Offline</span>
+              ),
+            },
+            {
+              label: 'SIMD Enabled',
+              content: (
+                <span className={`badge ${status?.rust_simd_enabled ? 'bg-[var(--color-green-muted)] text-positive' : 'bg-white/5 text-[var(--color-text-muted)]'}`}>
+                  {status?.rust_simd_enabled ? 'True' : 'False'}
+                </span>
+              ),
+            },
+            { label: 'Active Agents', content: <span className="font-mono text-[var(--color-gold-accent)] font-bold">{status?.active_agents || 0}</span> },
+            { label: 'LLM Latency', content: <span className="font-mono text-[var(--color-blue)]">{status?.llm_api_latency_ms || 0} ms</span> },
+            { label: 'DB Size', content: <span className="font-mono text-[var(--color-blue)]">{status?.database_size_mb || 0} MB</span> },
+          ].map((row) => (
+            <div key={row.label} className="flex justify-between items-center py-2 border-b border-[var(--color-border)] last:border-0">
+              <span className="text-[var(--color-text-secondary)] text-sm">{row.label}</span>
+              {row.content}
+            </div>
+          ))}
         </div>
       </GlassCard>
 
       <GlassCard>
-        <h2 className="text-[var(--color-gold-accent)] font-display font-semibold text-2xl mb-6">Launch Backtest</h2>
-        <div className="flex gap-2 mb-6">
-          <button type="button" onClick={() => handlePreset('bull')} className="px-3 py-1 bg-emerald-500/20 text-emerald-400 rounded hover:bg-emerald-500/30 transition-colors text-sm">Bull Preset</button>
-          <button type="button" onClick={() => handlePreset('bear')} className="px-3 py-1 bg-rose-500/20 text-rose-400 rounded hover:bg-rose-500/30 transition-colors text-sm">Bear Preset</button>
-          <button type="button" onClick={() => handlePreset('sideways')} className="px-3 py-1 bg-blue-500/20 text-blue-400 rounded hover:bg-blue-500/30 transition-colors text-sm">Sideways Preset</button>
+        <h2 className="page-title mb-5">Launch Backtest</h2>
+        <div className="flex gap-2 mb-5">
+          <button type="button" onClick={() => handlePreset('bull')} className="btn btn-success text-xs">Bull Preset</button>
+          <button type="button" onClick={() => handlePreset('bear')} className="btn btn-danger text-xs">Bear Preset</button>
+          <button type="button" onClick={() => handlePreset('sideways')} className="btn btn-ghost text-xs">Sideways Preset</button>
         </div>
 
-        <form onSubmit={handleLaunch} className="flex flex-col gap-5">
-          <label className="flex flex-col gap-2 text-sm text-gray-300">
+        <form onSubmit={handleLaunch} className="flex flex-col gap-4">
+          <label className="flex flex-col gap-1.5 text-sm text-[var(--color-text-secondary)]">
             Initial Capital (USD)
             <input
               type="number"
               value={config.initial_capital}
               onChange={e => setConfig({ ...config, initial_capital: Number(e.target.value) })}
-              className="bg-[var(--color-dark-bg)] border border-[var(--color-dark-border)] text-white p-3 rounded-lg focus:border-[var(--color-gold-accent)] focus:ring-1 focus:ring-[var(--color-gold-accent)] outline-none transition-all"
+              className="input"
             />
           </label>
-          <div className="grid grid-cols-2 gap-4">
-            <label className="flex flex-col gap-2 text-sm text-gray-300">
+          <div className="grid grid-cols-2 gap-3">
+            <label className="flex flex-col gap-1.5 text-sm text-[var(--color-text-secondary)]">
               Start Date
-              <input type="date" value={config.start_date} onChange={e => setConfig({ ...config, start_date: e.target.value })} className="bg-[var(--color-dark-bg)] border border-[var(--color-dark-border)] text-white p-3 rounded-lg focus:border-[var(--color-gold-accent)] outline-none" />
+              <input type="date" value={config.start_date} onChange={e => setConfig({ ...config, start_date: e.target.value })} className="input" />
             </label>
-            <label className="flex flex-col gap-2 text-sm text-gray-300">
+            <label className="flex flex-col gap-1.5 text-sm text-[var(--color-text-secondary)]">
               End Date
-              <input type="date" value={config.end_date} onChange={e => setConfig({ ...config, end_date: e.target.value })} className="bg-[var(--color-dark-bg)] border border-[var(--color-dark-border)] text-white p-3 rounded-lg focus:border-[var(--color-gold-accent)] outline-none" />
+              <input type="date" value={config.end_date} onChange={e => setConfig({ ...config, end_date: e.target.value })} className="input" />
             </label>
           </div>
 
-          <div className="flex flex-col gap-2 mt-2">
-            <span className="text-sm text-gray-300">Configuration Flags</span>
+          <div className="flex flex-col gap-2">
+            <span className="section-title">Configuration Flags</span>
             <div className="flex flex-wrap gap-2">
               {FLAG_DEFINITIONS.map(flag => (
                 <FlagChip
@@ -166,38 +165,20 @@ export function ControlTower() {
             </div>
           </div>
 
-          {/* Vol Trail Parameters — shown only when vol_trail_enabled is on */}
+          {/* Vol Trail Parameters */}
           {config.vol_trail_enabled && (
-            <div className="grid grid-cols-3 gap-4 mt-2 p-3 bg-white/5 rounded-xl border border-white/10">
-              <label className="flex flex-col gap-1 text-xs text-gray-400">
+            <div className="grid grid-cols-3 gap-3 p-3 bg-[var(--color-bg-hover)] rounded-lg border border-[var(--color-border)]">
+              <label className="flex flex-col gap-1 text-xs text-[var(--color-text-muted)]">
                 Multiplier
-                <input
-                  type="number"
-                  step="0.1"
-                  value={config.vol_trail_multiplier}
-                  onChange={e => setConfig({ ...config, vol_trail_multiplier: Number(e.target.value) })}
-                  className="bg-[var(--color-dark-bg)] border border-[var(--color-dark-border)] text-white px-3 py-1.5 rounded-lg text-sm focus:border-[var(--color-gold-accent)] outline-none"
-                />
+                <input type="number" step="0.1" value={config.vol_trail_multiplier} onChange={e => setConfig({ ...config, vol_trail_multiplier: Number(e.target.value) })} className="input text-xs" />
               </label>
-              <label className="flex flex-col gap-1 text-xs text-gray-400">
+              <label className="flex flex-col gap-1 text-xs text-[var(--color-text-muted)]">
                 Floor (min %)
-                <input
-                  type="number"
-                  step="0.01"
-                  value={config.vol_trail_floor}
-                  onChange={e => setConfig({ ...config, vol_trail_floor: Number(e.target.value) })}
-                  className="bg-[var(--color-dark-bg)] border border-[var(--color-dark-border)] text-white px-3 py-1.5 rounded-lg text-sm focus:border-[var(--color-gold-accent)] outline-none"
-                />
+                <input type="number" step="0.01" value={config.vol_trail_floor} onChange={e => setConfig({ ...config, vol_trail_floor: Number(e.target.value) })} className="input text-xs" />
               </label>
-              <label className="flex flex-col gap-1 text-xs text-gray-400">
+              <label className="flex flex-col gap-1 text-xs text-[var(--color-text-muted)]">
                 Ceiling (max %)
-                <input
-                  type="number"
-                  step="0.01"
-                  value={config.vol_trail_ceiling}
-                  onChange={e => setConfig({ ...config, vol_trail_ceiling: Number(e.target.value) })}
-                  className="bg-[var(--color-dark-bg)] border border-[var(--color-dark-border)] text-white px-3 py-1.5 rounded-lg text-sm focus:border-[var(--color-gold-accent)] outline-none"
-                />
+                <input type="number" step="0.01" value={config.vol_trail_ceiling} onChange={e => setConfig({ ...config, vol_trail_ceiling: Number(e.target.value) })} className="input text-xs" />
               </label>
             </div>
           )}
@@ -205,9 +186,9 @@ export function ControlTower() {
           <button
             type="submit"
             disabled={launchMutation.isPending}
-            className="mt-4 btn-gold disabled:opacity-50"
+            className="btn btn-primary mt-2"
           >
-            {launchMutation.isPending ? 'Launching...' : 'Execute Backtest'}
+            {launchMutation.isPending ? 'Launching…' : 'Execute Backtest'}
           </button>
         </form>
       </GlassCard>

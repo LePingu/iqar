@@ -12,7 +12,7 @@ export function LiveKPIStrip({ snapshot, greyed = false }: LiveKPIStripProps) {
 
   if (!snapshot) {
     return (
-      <div className={`grid grid-cols-2 md:grid-cols-4 gap-4 ${opacity}`}>
+      <div className={`grid grid-cols-2 lg:grid-cols-4 gap-3 ${opacity}`}>
         <KPICard label="Portfolio Value" value="--" neutral />
         <KPICard label="P&L" value="--" neutral />
         <KPICard label="Max Drawdown" value="--" neutral />
@@ -22,7 +22,7 @@ export function LiveKPIStrip({ snapshot, greyed = false }: LiveKPIStripProps) {
   }
 
   return (
-    <div className={`grid grid-cols-2 md:grid-cols-4 gap-4 ${opacity}`}>
+    <div className={`grid grid-cols-2 lg:grid-cols-4 gap-3 ${opacity}`}>
       <KPICard
         label="Portfolio Value"
         value={formatCurrency(snapshot.portfolio_value)}

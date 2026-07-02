@@ -19,16 +19,28 @@ export function LiveEquityCurve({ equityCurve, title = 'Live Equity Curve' }: Li
     if (!chartContainerRef.current) return;
 
     const chart = createChart(chartContainerRef.current, {
-      layout: { background: { color: 'transparent' }, textColor: '#d1d5db' },
-      grid: { vertLines: { color: 'rgba(255, 255, 255, 0.05)' }, horzLines: { color: 'rgba(255, 255, 255, 0.05)' } },
+      layout: {
+        background: { color: 'transparent' },
+        textColor: '#6B7280',
+        fontFamily: "'Roboto Mono', monospace",
+        fontSize: 11,
+      },
+      grid: {
+        vertLines: { color: 'rgba(255, 255, 255, 0.03)' },
+        horzLines: { color: 'rgba(255, 255, 255, 0.03)' },
+      },
       rightPriceScale: { borderVisible: false },
       timeScale: { borderVisible: false, timeVisible: true },
+      crosshair: {
+        vertLine: { color: 'rgba(212, 168, 67, 0.3)', labelBackgroundColor: '#1A1E26' },
+        horzLine: { color: 'rgba(212, 168, 67, 0.3)', labelBackgroundColor: '#1A1E26' },
+      },
     });
 
     const areaSeries = chart.addSeries(AreaSeries, {
-      lineColor: '#D4AF37',
-      topColor: 'rgba(212, 175, 55, 0.4)',
-      bottomColor: 'rgba(212, 175, 55, 0.0)',
+      lineColor: '#D4A843',
+      topColor: 'rgba(212, 168, 67, 0.15)',
+      bottomColor: 'rgba(212, 168, 67, 0.0)',
       lineWidth: 2,
     });
 
@@ -51,7 +63,7 @@ export function LiveEquityCurve({ equityCurve, title = 'Live Equity Curve' }: Li
     };
   }, []);
 
-  // Update chart data — use update() for appending, setData() only on first load
+  // Update chart data
   useEffect(() => {
     if (!seriesRef.current || !equityCurve || equityCurve.length === 0) return;
 
@@ -61,7 +73,6 @@ export function LiveEquityCurve({ equityCurve, title = 'Live Equity Curve' }: Li
     const chartData = Array.from(uniqueHistory.values());
 
     if (lastPointCountRef.current === 0) {
-      // First load — setData
       seriesRef.current.setData(
         chartData.map(point => ({
           time: point.time as import('lightweight-charts').Time,
@@ -70,7 +81,6 @@ export function LiveEquityCurve({ equityCurve, title = 'Live Equity Curve' }: Li
       );
       chartRef.current?.timeScale().fitContent();
     } else if (chartData.length > lastPointCountRef.current) {
-      // Append new points via update()
       const newPoints = chartData.slice(lastPointCountRef.current);
       for (const point of newPoints) {
         seriesRef.current.update({
@@ -84,8 +94,8 @@ export function LiveEquityCurve({ equityCurve, title = 'Live Equity Curve' }: Li
   }, [equityCurve]);
 
   return (
-    <GlassCard className="shrink-0 h-[300px] flex flex-col">
-      <h3 className="text-[var(--color-gold-accent)] font-display font-semibold text-sm uppercase tracking-wider mb-4">{title}</h3>
+    <GlassCard className="shrink-0 h-[280px] flex flex-col">
+      <h3 className="section-title">{title}</h3>
       <div ref={chartContainerRef} className="flex-1 w-full" />
     </GlassCard>
   );

@@ -28,7 +28,7 @@ export function LiveRunMonitor() {
         throw e;
       }
     },
-    refetchInterval: 2500, // Poll every 2.5 seconds
+    refetchInterval: 2500,
   });
 
   // Auto-resolve: redirect from /backtests/live to /backtests/live/:runId
@@ -51,29 +51,29 @@ export function LiveRunMonitor() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <p className="text-gray-400 animate-pulse">Detecting active run...</p>
+      <div className="flex items-center justify-center h-64">
+        <p className="text-[var(--color-text-muted)] animate-pulse text-sm">Detecting active run…</p>
       </div>
     );
   }
 
   if (error && !data) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 p-4 rounded-xl max-w-md">
-          <span className="font-bold">Error:</span> Failed to connect to live backtest service.
-        </div>
+      <div className="flex items-center justify-center h-64">
+        <GlassCard className="max-w-md text-center">
+          <p className="text-negative font-medium">Failed to connect to live backtest service.</p>
+        </GlassCard>
       </div>
     );
   }
 
   if (!data) {
     return (
-      <div className="flex items-center justify-center h-full py-20">
+      <div className="flex items-center justify-center h-64">
         <GlassCard className="text-center max-w-md w-full">
-          <h2 className="text-[var(--color-gold-accent)] font-display font-semibold text-2xl mb-4">No Active Backtests</h2>
-          <p className="text-gray-400">
-            Waiting for a new backtest to launch...
+          <h2 className="page-title mb-3">No Active Backtests</h2>
+          <p className="text-[var(--color-text-secondary)]">
+            Waiting for a new backtest to launch…
           </p>
         </GlassCard>
       </div>
@@ -86,33 +86,33 @@ export function LiveRunMonitor() {
     : 0;
 
   return (
-    <div className="animate-fade-in flex flex-col gap-6">
+    <div className="animate-fade-in flex flex-col gap-4">
       {/* Completion Banner */}
       {completeBanner && (
-        <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 p-4 rounded-xl text-center shrink-0">
-          <span className="font-bold">Run Complete!</span> Redirecting to results in a few seconds...
+        <div className="card bg-[var(--color-green-muted)] border-green-500/20 text-positive text-center text-sm shrink-0">
+          <span className="font-bold">Run Complete!</span> Redirecting to results in a few seconds…
         </div>
       )}
 
       {/* Header */}
-      <div className="flex justify-between items-center bg-white/5 p-4 rounded-xl border border-white/10 shrink-0">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 card shrink-0">
         <div>
-          <h2 className="text-[var(--color-gold-accent)] font-display font-semibold text-2xl font-light">Live Run Monitor</h2>
-          <div className="text-sm font-mono text-gray-500 mt-1">{data.run_id}</div>
+          <h2 className="page-title">Live Run Monitor</h2>
+          <div className="text-sm font-mono text-[var(--color-text-muted)] mt-1">{data.run_id}</div>
         </div>
-        <div className="flex flex-col items-end gap-2">
-          <div className="flex items-center gap-3">
-            <span className="text-gray-400 text-sm">Status:</span>
+        <div className="flex flex-col items-start sm:items-end gap-1.5">
+          <div className="flex items-center gap-2">
+            <span className="text-[var(--color-text-muted)] text-sm">Status:</span>
             {data.is_active ? (
               <StatusBadge variant="running" />
             ) : data.portfolio_metrics ? (
               <StatusBadge variant="completed" />
             ) : (
-              <StatusBadge variant="connecting" label="Finishing..." />
+              <StatusBadge variant="connecting" label="Finishing…" />
             )}
           </div>
           {snapshot && (
-            <div className="text-xs text-gray-400 font-mono">
+            <div className="text-xs text-[var(--color-text-muted)] font-mono">
               Progress: {snapshot.decisions_done} / {snapshot.decisions_target} ({progressPct.toFixed(1)}%)
             </div>
           )}
@@ -121,9 +121,9 @@ export function LiveRunMonitor() {
 
       {/* Progress Bar */}
       {snapshot && snapshot.decisions_target > 0 && (
-        <div className="shrink-0 h-2 bg-white/5 rounded-full overflow-hidden border border-white/10">
+        <div className="shrink-0 h-1.5 bg-[var(--color-bg-elevated)] rounded-full overflow-hidden border border-[var(--color-border)]">
           <div
-            className="h-full bg-gradient-to-r from-[var(--color-gold-dim)] to-[var(--color-gold-accent)] rounded-full transition-all duration-500"
+            className="h-full bg-[var(--color-gold-accent)] rounded-full transition-all duration-500"
             style={{ width: `${Math.min(progressPct, 100)}%` }}
           />
         </div>
@@ -138,18 +138,16 @@ export function LiveRunMonitor() {
       <LiveEquityCurve equityCurve={data.equity_curve} />
 
       {/* Bottom Row: Positions and Fills */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[400px]">
-        {/* Open Positions */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 min-h-[300px]">
         <GlassCard className="flex flex-col">
-          <h3 className="text-[var(--color-gold-accent)] font-display font-semibold text-sm uppercase tracking-wider mb-4">Open Positions</h3>
+          <h3 className="section-title">Open Positions</h3>
           <div className="flex-1 overflow-y-auto">
             <OpenPositionsTable positions={open_positions} />
           </div>
         </GlassCard>
 
-        {/* Recent Fills */}
         <GlassCard className="flex flex-col">
-          <h3 className="text-[var(--color-gold-accent)] font-display font-semibold text-sm uppercase tracking-wider mb-4">Recent Fills</h3>
+          <h3 className="section-title">Recent Fills</h3>
           <div className="flex-1 overflow-y-auto">
             <RecentFillsFeed fills={recent_fills} frozen={completeBanner} />
           </div>
