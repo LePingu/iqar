@@ -10,6 +10,8 @@ info:
 tags:
   - name: System
     description: System status and configuration
+  - name: Auth
+    description: Current-user identity and control permission
   - name: Backtest
     description: Backtest execution and historical review
   - name: Engine
@@ -41,6 +43,27 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/BacktestConfig'
+
+  /api/auth/me:
+    get:
+      tags:
+        - Auth
+      summary: Identity + control permission of the current user
+      description: |
+        Returns the Cloudflare Access-authenticated caller's email and whether
+        they may control the engine (``can_control``), derived server-side from
+        ENGINE_CONTROL_EMAILS. The frontend calls this on load to render view-only
+        vs control UI — it must NOT ship its own email list. Enforcement is
+        independent: control endpoints 403 non-operators regardless of the UI.
+      responses:
+        '200':
+          description: Current user identity
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WhoAmI'
+        '401':
+          description: Missing or invalid Cloudflare Access token
 
   /api/backtests:
     get:
@@ -352,6 +375,38 @@ paths:
         '503':
           description: Database not found
 
+  /api/engine/{session_id}/detail:
+    get:
+      tags:
+        - Engine
+      summary: Live monitoring for a trading-engine session (positions, fills, equity)
+      description: |
+        The paper/real-trading analogue of GET /api/backtests/live/{run_id}, but
+        under the engine namespace. Reads open positions, recent fills, and the
+        equity curve from the shared DB tables keyed by session_id. P&L baseline
+        is the earliest snapshot (the engine has no fixed "decisions target").
+        Open to any user Cloudflare Access admits (share results); only the
+        halt/resume/controls endpoints are operator-gated. Poll every 5 s on the
+        live dashboard.
+      parameters:
+        - in: path
+          name: session_id
+          required: true
+          schema:
+            type: string
+          example: live-paper
+      responses:
+        '200':
+          description: Live engine detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LiveEngineDetail'
+        '404':
+          description: No engine session with this id
+        '503':
+          description: Database not found
+
   /api/engine/{session_id}/halt:
     post:
       tags:
@@ -492,6 +547,49 @@ components:
           nullable: true
           description: Hard cap on simultaneously open positions
 
+    LiveEngineDetail:
+      type: object
+      description: |
+        Live monitoring payload for a trading-engine session — the paper/real
+        analogue of LiveBacktestDetail. Sourced entirely from the DB (positions,
+        trades, portfolio_snapshots) keyed by session_id. No backtest "decisions
+        target" concept; the engine runs open-endedly.
+      properties:
+        session_id:
+          type: string
+        trading_enabled:
+          type: boolean
+          description: Kill-switch state (false = halted)
+        is_active:
+          type: boolean
+          description: True when a snapshot was written within the last 10 minutes
+        portfolio_value:
+          type: number
+        pnl:
+          type: number
+          description: Absolute P&L vs the earliest snapshot (starting capital)
+        pnl_pct:
+          type: number
+        drawdown_pct:
+          type: number
+        open_positions_count:
+          type: integer
+        last_snapshot_ts:
+          type: string
+          nullable: true
+        open_positions:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpenPosition'
+        recent_fills:
+          type: array
+          items:
+            $ref: '#/components/schemas/LiveFill'
+        equity_curve:
+          type: array
+          items:
+            $ref: '#/components/schemas/EquityPoint'
+
     SystemStatus:
       type: object
       properties:
@@ -505,6 +603,21 @@ components:
           type: number
         active_agents:
           type: integer
+
+    WhoAmI:
+      type: object
+      required:
+        - email
+        - can_control
+      properties:
+        email:
+          type: string
+          description: The Cloudflare Access-verified email of the current user.
+        can_control:
+          type: boolean
+          description: >-
+            True if this user is in ENGINE_CONTROL_EMAILS and may hit
+            engine-control endpoints; false for read-only viewers.
 
     SignalType:
       type: string

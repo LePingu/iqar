@@ -139,12 +139,29 @@ Set up the TanStack Router with these five routes. They map directly to the endp
 
 **Architecture note**: The live engine writes to the same `portfolio_snapshots`, `positions`, and `trades` tables that the backtest monitor (Route D) already reads. Route E reuses those monitoring components but adds the engine-control panel on top.
 
-**Data sources**:
+**Data sources** (all under the `/api/engine/*` namespace — paper/real trading is a
+**separate route family** from `/api/backtests/*`; do NOT use the backtest live
+endpoints for the engine):
 - `GET /api/engine/{session_id}/status` — kill-switch state, risk limits, alive ping. Poll every 15 s.
-- `POST /api/engine/{session_id}/halt` — disable trading (queued to engine)
-- `POST /api/engine/{session_id}/resume` — re-enable trading (queued to engine)
-- `PUT /api/engine/{session_id}/controls` — update risk limits without restart
-- `GET /api/backtests/live/{session_id}` — positions, fills, equity curve. Reuse from Route D. Poll every 5 s while alive.
+- `GET /api/engine/{session_id}/detail` — positions, fills, equity curve, P&L. Poll every 5 s while active. (Open to any Access user — viewers can watch.)
+- `POST /api/engine/{session_id}/halt` — disable trading (operator-only; 403 for viewers)
+- `POST /api/engine/{session_id}/resume` — re-enable trading (operator-only)
+- `PUT /api/engine/{session_id}/controls` — update risk limits without restart (operator-only)
+
+> **View vs control — how to gate the UI.** Do **NOT** keep an email list in the
+> frontend. Call `GET /api/auth/me` on load; it returns `{ email, can_control }`
+> where `can_control` is derived server-side from `ENGINE_CONTROL_EMAILS`. Show the
+> control panel (halt/resume/limits) only when `can_control` is true; render
+> read-only for everyone else. This is cosmetic — the backend independently 403s
+> non-operators on the control endpoints regardless of what the UI shows. To add a
+> **reader**, add their email to the **Cloudflare Access policy** (dashboard) and do
+> NOT add them to `ENGINE_CONTROL_EMAILS`; no code or config change ships to git.
+
+> **Route separation:** `/api/backtests/live*` monitors **backtests**; `/api/engine/*`
+> monitors the **live trading engine**. They read the same DB tables but are distinct
+> routes, and the backtest auto-detect (`GET /api/backtests/live`) deliberately
+> **excludes** engine sessions — so a backtest and the paper engine can run at the
+> same time without the backtest monitor latching onto the engine.
 
 **Default session_id**: `live-paper` (matches `LIVE_SESSION_ID` env var). Hard-code for now; add a session picker later when multiple sessions exist.
 
@@ -173,7 +190,128 @@ Set up the TanStack Router with these five routes. They map directly to the endp
 
 ---
 
-## 5. First Steps for the Agent
+## 5. Connecting the Frontend to the Backend
+
+The frontend is deployed **on the same OVH Public Cloud instance** as the backend, as a
+container named `iqar` in `docker-compose.yml`, and is the **only** service exposed
+to the internet. It serves the built SPA and **reverse-proxies `/api` to the backend
+over the internal Docker network**, so the browser only ever talks to **one origin**.
+That removes CORS, third-party-cookie, and token-juggling problems entirely.
+
+```
+Browser ─► Cloudflare Access (SSO) ─► cloudflared ─► iqar:80 (nginx)
+                                                       ├── serves the SPA (static)
+                                                       └── /api ─► tower:8000  (internal)
+```
+
+Because everything is one origin behind Cloudflare Access, the Access cookie/JWT is
+**first-party** — login "just works" in the browser, with **no service token or
+`cloudflared access` dance**. (An earlier draft of this section used a local
+service-token/user-token Vite proxy against the tunnel hostname; that approach is
+obsolete now that the frontend is co-deployed and reverse-proxies the API.)
+
+### 5.1 API base — relative `/api`
+
+The SPA must call the API at a **relative** base so requests hit its own origin and
+nginx proxies them on to the backend. The browser cannot reach `tower:8000` directly:
+
+```ts
+// src/lib/api.ts
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '/api';
+```
+
+In production set nothing (the `/api` default is correct). In local dev, point
+`VITE_API_BASE_URL` at the Vite proxy (see 5.3).
+
+### 5.2 The iqar repo: Dockerfile + nginx
+
+The iqar repo builds the static SPA and serves it with nginx, which also proxies
+`/api` to `tower`. Two files belong in that repo:
+
+`Dockerfile`:
+```dockerfile
+# ---- build the SPA ----
+FROM node:22-alpine AS build
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build                       # → /app/dist
+
+# ---- serve with nginx ----
+FROM nginx:1.27-alpine
+COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/dist /usr/share/nginx/html
+EXPOSE 80
+```
+
+`deploy/nginx.conf`:
+```nginx
+# WebSocket upgrade plumbing (http context; conf.d is included inside http{}).
+map $http_upgrade $connection_upgrade { default upgrade; '' close; }
+
+server {
+  listen 80;
+  server_name _;
+  root /usr/share/nginx/html;
+
+  # SPA client-side routing: unknown paths fall back to index.html.
+  location / {
+    try_files $uri $uri/ /index.html;
+  }
+
+  # Reverse-proxy the API to the internal backend. nginx forwards the
+  # Cf-Access-Jwt-Assertion header and the CF_Authorization cookie to tower, so
+  # the email-based control auth (halt/resume/limits) keeps working.
+  location /api/ {
+    proxy_pass http://tower:8000;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Upgrade $http_upgrade;          # live WS streams
+    proxy_set_header Connection $connection_upgrade;
+    proxy_read_timeout 3600s;                         # long-lived WS / SSE
+  }
+}
+```
+
+**CI**: build and push to the **same registry namespace** as the backend —
+`ghcr.io/lepingu/iqar:<sha>` and `:latest` — then redeploy only the
+frontend on the host:
+```
+docker compose pull iqar && docker compose up -d iqar
+```
+`tower` needs no redeploy when only the frontend changes. This repo already wires
+`iqar` into `docker-compose.yml` and points the Cloudflare tunnel at `http://iqar:80`;
+the registry tag is `IQAR_IMAGE` in `.env.production` (defaults to `:latest`).
+
+### 5.3 Local development
+
+No Cloudflare needed locally — run the backend and frontend side by side and let the
+Vite dev server proxy `/api`:
+
+```ts
+// vite.config.ts (dev only)
+server: {
+  proxy: {
+    '/api': { target: 'http://localhost:8000', changeOrigin: true, ws: true },
+  },
+},
+```
+
+Start the backend with `uvicorn src.api.main:app --port 8000` (or
+`docker compose -f docker-compose.local.yml up`), then `npm run dev`. Locally the
+control endpoints are open — `ACCESS_CONTROL_ENABLED=false` logs a startup warning and
+`require_control_user` returns `dev-local` — so you can exercise halt/resume/limits
+without any token. On the server, those require your email in `ENGINE_CONTROL_EMAILS`.
+
+---
+
+## 6. First Steps for the Agent
+
+> **Before any data view will load**, set the API base + dev proxy (§5) — the SPA
+> reaches the backend through its own origin (`/api`), never `tower:8000` directly.
 
 Build in this order — later views depend on components from earlier ones:
 

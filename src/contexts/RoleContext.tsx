@@ -14,37 +14,6 @@ const RoleContext = createContext<RoleContextValue>({
   loading: true,
 });
 
-/**
- * Decode the payload of a JWT without verification.
- * Cloudflare Access already verified it — we just need the email claim.
- */
-function decodeJwtPayload(token: string): Record<string, unknown> | null {
-  try {
-    const parts = token.split('.');
-    if (parts.length !== 3) return null;
-    const payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-    return JSON.parse(atob(payload));
-  } catch {
-    return null;
-  }
-}
-
-/** Read the CF_Authorization cookie value. */
-function getCfEmail(): string | null {
-  const match = document.cookie
-    .split('; ')
-    .find((c) => c.startsWith('CF_Authorization='));
-  if (!match) return null;
-  const token = match.split('=')[1];
-  const payload = decodeJwtPayload(token);
-  if (!payload || typeof payload.email !== 'string') return null;
-  return payload.email;
-}
-
-interface RuntimeConfig {
-  adminEmails: string[];
-}
-
 export function RoleProvider({ children }: { children: ReactNode }) {
   const [role, setRole] = useState<Role>('reader');
   const [email, setEmail] = useState<string | null>(null);
@@ -53,35 +22,30 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     async function resolve() {
       try {
-        // In development (no CF cookie), default to admin for convenience
-        const cfEmail = getCfEmail();
-
-        if (!cfEmail) {
-          // No Cloudflare Access cookie — local dev or direct access
+        const res = await fetch('/api/auth/me');
+        if (res.ok) {
+          const data = await res.json();
+          setEmail(data.email);
+          setRole(data.can_control ? 'admin' : 'reader');
+        } else {
+          // Fallback if backend is missing or unauthenticated
+          if (import.meta.env.DEV) {
+            setRole('admin');
+            setEmail(null);
+          } else {
+            setRole('reader');
+            setEmail(null);
+          }
+        }
+      } catch {
+        // On network error (e.g. backend down)
+        if (import.meta.env.DEV) {
           setRole('admin');
           setEmail(null);
-          return;
-        }
-
-        setEmail(cfEmail);
-
-        // Fetch runtime config to get the admin email list
-        const res = await fetch('/runtime-config.json');
-        if (!res.ok) {
-          // Config not found — default to reader for safety
+        } else {
           setRole('reader');
-          return;
+          setEmail(null);
         }
-
-        const config: RuntimeConfig = await res.json();
-        const normalised = cfEmail.toLowerCase();
-        const isAdmin = config.adminEmails.some(
-          (e) => e.toLowerCase() === normalised,
-        );
-        setRole(isAdmin ? 'admin' : 'reader');
-      } catch {
-        // On any error, default to reader (safe default)
-        setRole('reader');
       } finally {
         setLoading(false);
       }
