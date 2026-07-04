@@ -26,7 +26,8 @@ export function RoleProvider({ children }: { children: ReactNode }) {
         if (res.ok) {
           const data = await res.json();
           setEmail(data.email);
-          setRole(data.can_control ? 'admin' : 'reader');
+          const isController = data.can_control === true || data.can_control === 'true';
+          setRole(isController ? 'admin' : 'reader');
         } else {
           // Fallback if backend is missing or unauthenticated
           if (import.meta.env.DEV) {
