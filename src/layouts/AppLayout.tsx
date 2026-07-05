@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Outlet, Link } from '@tanstack/react-router';
 import { FiActivity, FiServer, FiTrendingUp, FiRadio, FiMenu, FiX } from 'react-icons/fi';
 import { useRole } from '../contexts/RoleContext';
+import logoUrl from '../assets/iqar_logo.png';
 
 interface NavItem {
   to: string;
@@ -49,10 +50,7 @@ export function AppLayout() {
         {/* Logo */}
         <div className="flex items-center justify-between px-4 py-4 border-b border-[var(--color-border)]">
           <div className="flex items-center gap-2.5">
-            <FiActivity className="text-[var(--color-gold-accent)]" size={20} />
-            <span className="font-display font-semibold text-[var(--color-text-primary)] text-base">
-              IQAR
-            </span>
+            <img src={logoUrl} alt="IQAR Logo" className="h-8 w-auto object-contain" />
           </div>
           <button
             className="md:hidden text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]"
@@ -112,8 +110,7 @@ export function AppLayout() {
             <FiMenu size={22} />
           </button>
           <div className="flex items-center gap-2">
-            <FiActivity className="text-[var(--color-gold-accent)]" size={18} />
-            <span className="font-display font-semibold text-sm">IQAR</span>
+            <img src={logoUrl} alt="IQAR" className="h-6 w-auto object-contain" />
           </div>
           <div className="w-6" /> {/* Spacer for centering */}
         </header>
