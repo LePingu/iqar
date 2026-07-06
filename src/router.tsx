@@ -12,6 +12,26 @@ import { RunsBrowser } from './views/RunsBrowser';
 import { RunDetail } from './views/RunDetail';
 import { JobMonitor } from './views/JobMonitor';
 
+import { useRole } from './contexts/RoleContext';
+
+function RequireAdmin({ children }: { children: React.ReactNode }) {
+  const { role, loading } = useRole();
+  
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-[var(--color-text-muted)] text-sm">Verifying access…</div>
+      </div>
+    );
+  }
+
+  if (role !== 'admin') {
+    return <Navigate to="/live" replace />;
+  }
+
+  return <>{children}</>;
+}
+
 // --- Route definitions ---
 
 const rootRoute = createRootRoute({ component: AppLayout });
@@ -19,37 +39,37 @@ const rootRoute = createRootRoute({ component: AppLayout });
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
-  component: ControlTower,
+  component: () => <RequireAdmin><ControlTower /></RequireAdmin>,
 });
 
 const backtestsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/backtests',
-  component: RunsBrowser,
+  component: () => <RequireAdmin><RunsBrowser /></RequireAdmin>,
 });
 
 const backtestsLiveRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/backtests/live',
-  component: LiveRunMonitor,
+  component: () => <RequireAdmin><LiveRunMonitor /></RequireAdmin>,
 });
 
 const backtestsLiveRunRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/backtests/live/$runId',
-  component: LiveRunMonitor,
+  component: () => <RequireAdmin><LiveRunMonitor /></RequireAdmin>,
 });
 
 const runDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/backtests/$runId',
-  component: RunDetail,
+  component: () => <RequireAdmin><RunDetail /></RequireAdmin>,
 });
 
 const jobMonitorRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/backtests/jobs/$jobId',
-  component: JobMonitor,
+  component: () => <RequireAdmin><JobMonitor /></RequireAdmin>,
 });
 
 const liveRoute = createRoute({
