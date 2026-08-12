@@ -119,9 +119,14 @@ paths:
         - Backtest
       summary: Poll progress of a running or completed backtest job
       description: |
-        Reads from SQLite `portfolio_snapshots`. job_id == run_id (no separate job manager yet).
-        Returns 404 when the run has no DB data (i.e. it was never started or predates the DB).
+        Reads the `backtest_runs` row (status, config, error) plus a `portfolio_snapshots`
+        count for progress. job_id == run_id (no separate job manager yet).
+        Returns 404 only when the run was never created (no `backtest_runs` row) — a run
+        that just started (0 decisions yet) still returns 200, since the row is created
+        before the trading loop begins, not after it finishes.
         `progress_pct` = snap_count / target_decisions × 100 (0–100).
+        `status` is `failed` with `error` populated if the run raised; `completed` once
+        done; `running` while in progress and still writing snapshots.
         Use `GET /api/backtests/live/{run_id}` for richer live data (positions, fills, equity curve).
       parameters:
         - in: path
@@ -145,7 +150,9 @@ paths:
         - Backtest
       summary: Detect the currently active run and return its live state
       description: |
-        A run is "active" if it wrote a `portfolio_snapshots` row within the last 60 seconds.
+        A run is "active" if it wrote a `portfolio_snapshots` row within the last 600 seconds
+        (a single LLM-heavy decision step can take 150-180s; 600s covers the observed
+        worst-case gap with margin without flapping to inactive mid-run).
         Returns 404 when no run is currently active.
         Poll this endpoint on the Live Run Monitor page to auto-attach to whatever run just started
         without knowing the run_id in advance.
@@ -455,6 +462,51 @@ paths:
       responses:
         '200':
           description: Command queued
+        '404':
+          description: Session not found
+
+  /api/engine/{session_id}/flush:
+    post:
+      tags:
+        - Engine
+      summary: Queue a destructive clean-slate portfolio reset
+      description: |
+        Inserts a ``flush`` row into ``engine_commands``. At the top of its next
+        cycle the engine **deletes this session's positions, trades, and
+        portfolio_snapshots** and resets its in-memory ledger to starting cash with
+        no positions — so it restarts with a clean portfolio even when the database
+        already holds positions. The engine process keeps running (HMM/ML-1 models
+        stay warm) and the ``trading_enabled`` kill-switch is left unchanged.
+
+        **Destructive and irreversible**: the wiped trade history for this session
+        cannot be recovered. Operator-gated (``can_control``). Intended as the
+        "start fresh" button before a new paper run. The frontend should confirm
+        (e.g. a modal) before calling it.
+      parameters:
+        - in: path
+          name: session_id
+          required: true
+          schema:
+            type: string
+          example: live-paper
+      responses:
+        '200':
+          description: Flush command queued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  queued:
+                    type: string
+                    example: flush
+                  session_id:
+                    type: string
+                  by:
+                    type: string
+                    description: Operator email that issued the flush
+        '403':
+          description: Caller is not an operator (can_control=false)
         '404':
           description: Session not found
 

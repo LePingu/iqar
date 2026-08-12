@@ -147,6 +147,18 @@ export function LiveTradingDashboard() {
     },
   });
 
+  const [showFlushConfirm, setShowFlushConfirm] = useState(false);
+
+  // Flush mutation
+  const flushMutation = useMutation({
+    mutationFn: () => api.flushEngine(sessionId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['engineStatus', sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['liveBacktest', sessionId] });
+      setShowFlushConfirm(false);
+    },
+  });
+
   // Resume mutation
   const resumeMutation = useMutation({
     mutationFn: () => api.resumeEngine(sessionId),
@@ -233,9 +245,9 @@ export function LiveTradingDashboard() {
             </div>
           </div>
 
-          {/* Halt / Resume buttons — admin only */}
+          {/* Controls — admin only */}
           {isAdmin && (
-            <div className="flex gap-3">
+            <div className="flex gap-3 items-center flex-wrap">
               {tradingEnabled ? (
                 <button
                   onClick={() => haltMutation.mutate()}
@@ -251,6 +263,36 @@ export function LiveTradingDashboard() {
                   className="btn btn-success"
                 >
                   {resumeMutation.isPending ? 'Resuming…' : '▶ Resume Trading'}
+                </button>
+              )}
+              
+              <div className="hidden sm:block h-6 w-px bg-[var(--color-border)] mx-1"></div>
+              
+              {showFlushConfirm ? (
+                <div className="flex items-center gap-2 bg-[var(--color-red-muted)] px-3 py-1.5 rounded-lg border border-red-500/30">
+                  <span className="text-xs text-negative font-medium mr-1">Wipe portfolio?</span>
+                  <button 
+                    onClick={() => setShowFlushConfirm(false)}
+                    className="btn btn-ghost text-xs py-1 px-2 h-auto"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    onClick={() => flushMutation.mutate()}
+                    disabled={flushMutation.isPending}
+                    className="btn btn-danger text-xs py-1 px-2 h-auto"
+                  >
+                    {flushMutation.isPending ? 'Flushing…' : 'Confirm'}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setShowFlushConfirm(true)}
+                  disabled={!engineAlive || flushMutation.isPending}
+                  className="btn btn-ghost text-negative hover:bg-red-500/10 hover:border-red-500/30"
+                  title="Wipe positions and reset to starting capital"
+                >
+                  ↻ Reset Portfolio
                 </button>
               )}
             </div>

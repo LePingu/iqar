@@ -81,4 +81,9 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(controls),
     }),
+
+  flushEngine: (sessionId: string) =>
+    fetchJson<{ queued: string; session_id: string; by: string }>(`/engine/${sessionId}/flush`, {
+      method: 'POST',
+    }),
 };
