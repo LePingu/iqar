@@ -119,7 +119,7 @@ export function LiveTradingDashboard() {
     queryKey: ['liveBacktest', sessionId],
     queryFn: async () => {
       try {
-        return await api.getLiveBacktest(sessionId);
+        return await api.getEngineDetail(sessionId);
       } catch {
         return null;
       }
@@ -337,7 +337,19 @@ export function LiveTradingDashboard() {
       </GlassCard>
 
       {/* Live KPIs */}
-      <LiveKPIStrip snapshot={liveData?.snapshot ?? null} greyed={!engineAlive} />
+      <LiveKPIStrip 
+        snapshot={liveData ? {
+          portfolio_value: liveData.portfolio_value,
+          pnl: liveData.pnl,
+          pnl_pct: liveData.pnl_pct,
+          drawdown_pct: liveData.drawdown_pct,
+          open_positions_count: liveData.open_positions_count,
+          last_snapshot_ts: liveData.last_snapshot_ts || '',
+          decisions_done: 0,
+          decisions_target: 0,
+        } : null} 
+        greyed={!engineAlive} 
+      />
 
       {/* Equity Curve */}
       <LiveEquityCurve equityCurve={liveData?.equity_curve ?? []} title="Engine Equity Curve" />

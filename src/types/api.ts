@@ -243,3 +243,18 @@ export interface EngineControls {
   max_daily_loss_pct?: number | null;
   max_open_positions?: number | null;
 }
+
+export interface LiveEngineDetail {
+  session_id: string;
+  trading_enabled: boolean;
+  is_active: boolean;
+  portfolio_value: number;
+  pnl: number;
+  pnl_pct: number;
+  drawdown_pct: number;
+  open_positions_count: number;
+  last_snapshot_ts: string | null;
+  open_positions: OpenPosition[];
+  recent_fills: LiveFill[];
+  equity_curve: EquityPoint[];
+}

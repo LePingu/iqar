@@ -11,6 +11,7 @@ import type {
   LiveBacktestDetail,
   EngineStatus,
   EngineControls,
+  LiveEngineDetail,
 } from '../types/api';
 
 const API_BASE = '/api';
@@ -64,6 +65,9 @@ export const api = {
   // Engine control (Route E)
   getEngineStatus: (sessionId: string) =>
     fetchJson<EngineStatus>(`/engine/${sessionId}/status`),
+
+  getEngineDetail: (sessionId: string) =>
+    fetchJson<LiveEngineDetail>(`/engine/${sessionId}/detail`),
 
   haltEngine: (sessionId: string) =>
     fetchJson<{ queued: string; session_id: string }>(`/engine/${sessionId}/halt`, {
