@@ -1,5 +1,5 @@
 import type { OpenPosition } from '../types/api';
-import { formatCurrency, formatPercentage } from '../utils/trading';
+import { fmtPrice, formatPercentage } from '../utils/trading';
 
 interface OpenPositionsTableProps {
   positions: OpenPosition[];
@@ -29,9 +29,9 @@ export function OpenPositionsTable({ positions }: OpenPositionsTableProps) {
             <tr key={idx} className="table-row">
               <td className="table-cell text-[var(--color-text-primary)] font-medium">{pos.symbol}</td>
               <td className={`table-cell font-medium ${pos.side === 'BUY' ? 'text-positive' : 'text-negative'}`}>{pos.side}</td>
-              <td className="table-cell text-right text-[var(--color-text-secondary)]">{pos.quantity.toFixed(4)}</td>
-              <td className="table-cell text-right text-[var(--color-text-secondary)]">{formatCurrency(pos.entry_price)}</td>
-              <td className="table-cell text-right text-[var(--color-text-primary)]">{formatCurrency(pos.current_price)}</td>
+              <td className="table-cell text-right text-[var(--color-text-secondary)]">{fmtPrice(pos.quantity)}</td>
+              <td className="table-cell text-right text-[var(--color-text-secondary)]">{fmtPrice(pos.entry_price)}</td>
+              <td className="table-cell text-right text-[var(--color-text-primary)]">{fmtPrice(pos.current_price)}</td>
               <td className={`table-cell text-right ${pos.unrealized_pnl_pct >= 0 ? 'text-positive' : 'text-negative'}`}>
                 {formatPercentage(pos.unrealized_pnl_pct)}
               </td>

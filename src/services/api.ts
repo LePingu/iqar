@@ -12,6 +12,7 @@ import type {
   EngineStatus,
   EngineControls,
   LiveEngineDetail,
+  RealAccountStatus,
 } from '../types/api';
 
 const API_BASE = '/api';
@@ -90,4 +91,12 @@ export const api = {
     fetchJson<{ queued: string; session_id: string; by: string }>(`/engine/${sessionId}/flush`, {
       method: 'POST',
     }),
+
+  // Real-money account (Route F)
+  getRealAccount: (sessionId?: string) =>
+    fetchJson<RealAccountStatus>(
+      sessionId
+        ? `/engine/real/account?session_id=${encodeURIComponent(sessionId)}`
+        : '/engine/real/account',
+    ),
 };

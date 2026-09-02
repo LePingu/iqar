@@ -179,14 +179,101 @@ endpoints for the engine):
 
 - `OpenPositionsTable` — reuse from Route D: symbol · side · qty · entry $ · current $ · unrealised P&L%
 
-- `RecentFillsFeed` — reuse from Route D: last 20 fills, newest first
+- `RecentFillsFeed` — last 20 fills, newest first. **Show realized P&L on SELL
+  fills**: `realized_pnl` / `realized_pnl_pct` are populated on sells and `null`
+  on buys (a buy's stored pnl is only its fee, which would read as though every
+  entry had already lost money). Colour the same way `OpenPositionsTable` colours
+  unrealised P&L, and render nothing in that column for buys — a closed trade
+  should say whether it made money, which the feed previously did not.
 
 **When engine_alive=false**: show the control panel in a degraded state (grey badge, disabled Halt/Resume, stale KPIs greyed out). Do NOT redirect — the user needs to stay on this page to see the engine is down and to send a command when it comes back.
 
 **When the engine has never started** (no session row): show a single `EngineNotStarted` banner with the launch command:
 ```
-./scripts/launch-engine.sh --session=live-paper --capital=10000
+./scripts/run/engine.sh --session=live-paper --capital=10000
 ```
+
+---
+
+### Number formatting — significant digits, not fixed decimals
+
+Crypto prices span nine orders of magnitude in one table: XBT at ~78,000 and a
+meme asset at 0.0000012345. A fixed `toFixed(2)` renders the second as `0.00`,
+and even `toFixed(6)` keeps one significant digit out of five.
+
+**The API no longer rounds prices** — the column is `Numeric(20, 8)` and the
+backend used to truncate to 6dp, destroying the information before the client
+saw it. Formatting is now entirely the client's job, so it has to be done right.
+
+**Rule — for any price or quantity:**
+
+- `|x| >= 1` → 2 decimals (`78645.87`, `4.44`)
+- `0 < |x| < 1` → keep **3 significant digits**, i.e. 3 digits after the leading
+  zeros, never fewer than 2 decimals
+
+```
+0.1698        -> 0.170
+0.02571       -> 0.0257
+0.0002571     -> 0.000257
+0.00001234    -> 0.0000123
+0.0000012345  -> 0.00000123
+```
+
+One-liner that implements it:
+
+```ts
+const fmtPrice = (x: number): string =>
+  Math.abs(x) >= 1 ? x.toFixed(2)
+  : x === 0        ? "0.00"
+  : x.toFixed(Math.max(2, 2 - Math.floor(Math.log10(Math.abs(x)))));
+```
+
+Apply it to `price`, `entry_price`, `current_price` and `quantity` everywhere —
+fills feed, positions table, tooltips. **Money totals** (portfolio value, P&L in
+quote currency) stay at 2 decimals: those are dollars, not asset prices.
+
+---
+
+### F. Real-Money Portfolio (`/live/real`)
+
+**Purpose**: a deliberately separate console for real capital. Not a theme
+variant of Route E — a different page, because the most dangerous failure mode in
+this system is acting on the wrong one.
+
+**Why separate rather than a toggle**: paper and real write to the same tables
+under different `session_id`s, so a session picker would put "$10,000 of
+pretend money" and "$10,000 of real money" one dropdown apart. They should never
+be one misclick apart.
+
+**Data sources**: the same `/api/engine/{session_id}/*` family, with
+`session_id=live-real`. No new endpoints are required for the read path.
+
+**Components** — the four things that would have caught real incidents:
+
+- `ArmingStatePanel` — real money requires **four independent switches**, and the
+  operator must never have to infer their state from a log line:
+  `LIVE_MODE=real` · `LIVE_KRAKEN_ARMED` · `LIVE_KRAKEN_VALIDATE_ONLY` ·
+  `LIVE_KRAKEN_MAX_ORDER_USD`. Render as four explicit badges. **Validate-only is
+  the safe state and should read as safe, not as an error** — in that mode orders
+  are sent to Kraken for validation and never placed.
+
+- `CashReconciliation` — exchange balance vs ledger balance, side by side, with
+  the drift. The engine refuses to start when these disagree beyond $1 or 1%
+  (untracked deposits and untracked positions need opposite corrections, so it
+  will not guess). Show the last successful reconciliation time.
+
+- `RunHealthBadge` — `run_health.degraded` plus its reasons. A degraded run is one
+  whose critic or ML-1 was not functioning; its numbers are not a measurement.
+
+- `HaltButton` — the highest-value control in the system. Halt must be reachable
+  in one click and visually dominant; resume should be deliberately less prominent.
+
+**Visual treatment**: unmistakably distinct from `/live`. Different accent colour,
+a persistent "REAL MONEY" marker in the header, and the session id always visible.
+
+**Until real trading is armed** this route will show an engine that authenticates
+and reads balances but refuses every order. That is the intended first
+deployment, not an error state — render it as healthy-but-idle.
 
 ---
 

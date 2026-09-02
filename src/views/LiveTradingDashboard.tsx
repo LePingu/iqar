@@ -208,7 +208,7 @@ export function LiveTradingDashboard() {
           </p>
           {isAdmin && (
             <div className="bg-[var(--color-bg-root)] border border-[var(--color-border)] rounded-lg p-3 font-mono text-sm text-[var(--color-text-secondary)] text-left">
-              ./scripts/launch-engine.sh --session={sessionId} --capital=10000
+              ./scripts/run/engine.sh --session={sessionId} --capital=10000
             </div>
           )}
         </GlassCard>

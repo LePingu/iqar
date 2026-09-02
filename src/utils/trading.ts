@@ -1,3 +1,9 @@
+export function fmtPrice(x: number): string {
+  if (Math.abs(x) >= 1) return x.toFixed(2);
+  if (x === 0) return '0.00';
+  return x.toFixed(Math.max(2, 2 - Math.floor(Math.log10(Math.abs(x)))));
+}
+
 export function formatCurrency(value: number, decimals = 2): string {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',

@@ -39,6 +39,7 @@ export interface BacktestConfig {
   position_rotation_enabled: boolean;
   mock_critic: boolean;
   anti_averaging_down_enabled: boolean;
+  critic_sideways_asset_aware_enabled: boolean;
   vol_trail_enabled: boolean;
   vol_trail_multiplier: number;
   vol_trail_floor: number;
@@ -215,6 +216,15 @@ export interface LiveFill {
   price: number;
   quantity: number;
   timestamp: string;
+  realized_pnl: number | null;
+  realized_pnl_pct: number | null;
+}
+
+export interface RealAccountStatus {
+  as_of: string;
+  quote_cash: number | null;
+  total_value: number | null;
+  num_holdings: number | null;
 }
 
 export interface LiveBacktestDetail {

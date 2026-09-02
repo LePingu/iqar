@@ -8,6 +8,7 @@ import { AppLayout } from './layouts/AppLayout';
 import { ControlTower } from './views/ControlTower';
 import { LiveRunMonitor } from './views/LiveRunMonitor';
 import { LiveTradingDashboard } from './views/LiveTradingDashboard';
+import { LiveRealDashboard } from './views/LiveRealDashboard';
 import { RunsBrowser } from './views/RunsBrowser';
 import { RunDetail } from './views/RunDetail';
 import { JobMonitor } from './views/JobMonitor';
@@ -60,6 +61,12 @@ const liveRoute = createRoute({
   component: LiveTradingDashboard,
 });
 
+const liveRealRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/live/real',
+  component: () => <RequireAdmin><LiveRealDashboard /></RequireAdmin>,
+});
+
 /** Catch-all: readers hitting admin-only routes get redirected to /live */
 const catchAllRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -75,6 +82,7 @@ const routeTree = rootRoute.addChildren([
   runDetailRoute,
   jobMonitorRoute,
   liveRoute,
+  liveRealRoute,
   catchAllRoute,
 ]);
 

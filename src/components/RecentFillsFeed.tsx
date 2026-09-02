@@ -1,5 +1,5 @@
 import type { LiveFill } from '../types/api';
-import { formatCurrency } from '../utils/trading';
+import { fmtPrice, formatCurrency, formatPercentage } from '../utils/trading';
 
 interface RecentFillsFeedProps {
   fills: LiveFill[];
@@ -20,10 +20,15 @@ export function RecentFillsFeed({ fills, frozen = false }: RecentFillsFeedProps)
               {fill.side}
             </span>
             <span className="text-[var(--color-text-primary)] font-medium">{fill.symbol}</span>
-            <span className="text-[var(--color-text-muted)] text-xs">× {fill.quantity.toFixed(4)}</span>
+            <span className="text-[var(--color-text-muted)] text-xs">× {fmtPrice(fill.quantity)}</span>
           </div>
           <div className="flex items-center gap-4">
-            <span className="text-[var(--color-text-primary)]">{formatCurrency(fill.price)}</span>
+            {fill.side === 'SELL' && fill.realized_pnl != null && (
+              <span className={`font-mono text-xs ${fill.realized_pnl >= 0 ? 'text-positive' : 'text-negative'}`}>
+                {fill.realized_pnl >= 0 ? '+' : ''}{formatCurrency(fill.realized_pnl)} ({formatPercentage(fill.realized_pnl_pct ?? 0, 1)})
+              </span>
+            )}
+            <span className="text-[var(--color-text-primary)]">{fmtPrice(fill.price)}</span>
             <span className="text-[var(--color-text-muted)] text-xs w-18 text-right">
               {new Date(fill.timestamp).toLocaleTimeString()}
             </span>

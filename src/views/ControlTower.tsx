@@ -29,6 +29,7 @@ const DEFAULT_CONFIG: BacktestConfig = {
   position_rotation_enabled: true,
   mock_critic: false,
   anti_averaging_down_enabled: true,
+  critic_sideways_asset_aware_enabled: false,
   vol_trail_enabled: false,
   vol_trail_multiplier: 1.0,
   vol_trail_floor: 0.02,
@@ -43,6 +44,7 @@ const FLAG_DEFINITIONS = [
   { key: 'disable_ai_exits' as const, label: 'Disable AI Exits' },
   { key: 'mock_critic' as const, label: 'Mock Critic' },
   { key: 'anti_averaging_down_enabled' as const, label: 'Anti Avg Down' },
+  { key: 'critic_sideways_asset_aware_enabled' as const, label: 'Critic Sideways Asset-Aware' },
   { key: 'vol_trail_enabled' as const, label: 'Vol Trail' },
 ];
 

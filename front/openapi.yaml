@@ -353,6 +353,40 @@ paths:
                   data: {"type":"metrics","payload":{...Metrics...}}
                   data: {"type":"done","payload":{"run_id":"backtest_20260611_144912"}}
 
+  /api/engine/real/account:
+    get:
+      summary: Real Kraken account, as the engine last read it
+      description: |
+        Served from `real_portfolio_snapshots` — the tower holds no exchange
+        credentials, so it serves what the engine persisted rather than calling
+        Kraken.
+
+        Registered BEFORE `/api/engine/{session_id}/status`, so `real` is never
+        captured as a session id.
+
+        Operator-only: a real balance is not viewer information.
+      tags: [engine]
+      parameters:
+        - name: session_id
+          in: query
+          required: false
+          schema:
+            type: string
+            default: live-real
+      responses:
+        '200':
+          description: The most recent real-account snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RealAccountStatus'
+        '403':
+          description: Caller is not an operator
+        '404':
+          description: |
+            The engine has never read this account. NOT an empty account — do
+            not render as $0.
+
   /api/engine/{session_id}/status:
     get:
       tags:
@@ -771,6 +805,13 @@ components:
           type: boolean
           default: false
           description: Stub LLM to always agree; use for deterministic gate runs
+        critic_sideways_asset_aware_enabled:
+          type: boolean
+          default: false
+          description: >-
+            Sideways-regime critic judges each asset on its own evidence instead of
+            rejecting solely on the market-wide HMM regime label (Aug 2026 live-paper
+            root cause: market-wide regime blind to per-asset dispersion)
         anti_averaging_down_enabled:
           type: boolean
           default: true
@@ -1109,9 +1150,63 @@ components:
           type: number
           nullable: true
 
+    RealAccountStatus:
+      type: object
+      description: |
+        The real Kraken account as the **engine** last read it.
+
+        Served from `real_portfolio_snapshots`, NOT by calling Kraken. The tower
+        holds no exchange credentials by design — the key lives on the engine,
+        which is the only component that talks to Kraken — so the engine
+        persists each read and the tower serves it.
+
+        Two consequences for the UI:
+          * The view keeps working while the engine is stopped. It is showing
+            history, not proxying a live API.
+          * `as_of` is the age of the READ, not of the request. A stale
+            timestamp means the engine is not running — surface that rather than
+            presenting an old balance as if it were current.
+
+        `404` means the engine has never read this account. That is NOT an empty
+        account and must not be rendered as $0.
+
+        **Arming state is not here.** LIVE_MODE / LIVE_KRAKEN_ARMED /
+        LIVE_KRAKEN_VALIDATE_ONLY / the per-order cap are engine configuration,
+        and this endpoint serves a persisted portfolio snapshot that does not
+        carry them. The real-money screen still needs them — from a source that
+        actually knows, which does not exist yet. Do NOT infer "unarmed" from
+        their absence.
+      properties:
+        as_of:
+          type: string
+          description: When the engine read the account (ISO 8601). Not request time.
+        quote_cash:
+          type: number
+          nullable: true
+          description: Free USD as the exchange reported it.
+        total_value:
+          type: number
+          nullable: true
+        num_holdings:
+          type: integer
+          nullable: true
+          description: |
+            Count of non-quote balances held at the exchange. Per-asset balances
+            and open orders are deliberately NOT exposed: the engine reads them
+            from Kraken but the snapshot row does not store them, and empty
+            lists would claim "no holdings, no open orders" for an account that
+            may have both.
+
     LiveFill:
       type: object
-      description: A fill (buy or sell) from the SQLite trades table
+      description: |
+        A fill (buy or sell) from the `trades` table.
+
+        **Prices are unrounded.** The column is `Numeric(20, 8)` and the API no
+        longer truncates, because a fixed decimal count destroys sub-cent assets
+        before the client sees them (0.0000012345 rounded to 6dp is 0.000001 —
+        one significant digit out of five). Apply the significant-digit display
+        rule in FRONTEND_AGENT_CONTEXT.md rather than assuming 2dp.
       properties:
         symbol:
           type: string
@@ -1124,6 +1219,18 @@ components:
         timestamp:
           type: string
           description: Market timestamp of the fill (ISO 8601)
+        realized_pnl:
+          type: number
+          nullable: true
+          description: |
+            Realized P&L in quote currency. Present on **SELL** fills only;
+            `null` on BUYs. A BUY's stored pnl is just its fee, which would
+            render as a small loss on every entry and read as though the trade
+            had already gone wrong — so it is deliberately not surfaced.
+        realized_pnl_pct:
+          type: number
+          nullable: true
+          description: Realized P&L as a percentage. SELL fills only; null on BUYs.
 
     LiveSnapshot:
       type: object

@@ -3,7 +3,7 @@ import { useParams } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { createChart, AreaSeries, LineSeries } from 'lightweight-charts';
 import { api } from '../services/api';
-import { formatCurrency, formatPercentage } from '../utils/trading';
+import { formatCurrency, formatPercentage, fmtPrice } from '../utils/trading';
 import { CandlestickExplorer } from './CandlestickExplorer';
 import { GlassCard } from '../components/GlassCard';
 import { KPICard } from '../components/KPICard';
@@ -50,11 +50,11 @@ function TradesGrid({ runId }: { runId: string }) {
     }),
     tradeColumnHelper.accessor('price', {
       header: 'Price',
-      cell: info => <span className="font-mono text-[var(--color-text-secondary)] text-sm">{formatCurrency(info.getValue())}</span>,
+      cell: info => <span className="font-mono text-[var(--color-text-secondary)] text-sm">{fmtPrice(info.getValue())}</span>,
     }),
     tradeColumnHelper.accessor('size', {
       header: 'Size',
-      cell: info => <span className="font-mono text-[var(--color-text-secondary)] text-sm">{info.getValue().toFixed(4)}</span>,
+      cell: info => <span className="font-mono text-[var(--color-text-secondary)] text-sm">{fmtPrice(info.getValue())}</span>,
     }),
     tradeColumnHelper.accessor('pnl', {
       header: 'P&L',
