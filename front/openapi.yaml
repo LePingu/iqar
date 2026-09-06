@@ -592,6 +592,15 @@ components:
         Current state of the live trading engine for a session.
         Poll ``GET /api/engine/{session_id}/status`` every 15–30 s from the control panel.
       properties:
+        mode:
+          type: string
+          enum: [paper, real]
+          default: paper
+          description: |
+            Which book this session runs. Also selects the table set every other
+            engine endpoint serves for it — and `engine_alive` is computed
+            against that same set, so a real engine is not reported dead for
+            writing its heartbeat where it was supposed to.
         session_id:
           type: string
         trading_enabled:
@@ -641,6 +650,26 @@ components:
         trades, portfolio_snapshots) keyed by session_id. No backtest "decisions
         target" concept; the engine runs open-endedly.
       properties:
+        mode:
+          type: string
+          enum: [paper, real]
+          default: paper
+          description: Which book this payload describes; selects the source tables.
+        currency:
+          type: string
+          default: USD
+          description: |
+            Denomination of every monetary field here. Render it beside the
+            numbers — a real balance with no currency on it is not a figure
+            anyone should act on.
+        observed_from:
+          type: string
+          nullable: true
+          description: |
+            First snapshot this session recorded. For a real account that is when
+            the **engine started watching**, not when the account started trading:
+            there is no equity curve before this point, and it must not be drawn
+            as flat or as zero.
         session_id:
           type: string
         trading_enabled:
@@ -1130,6 +1159,22 @@ components:
       type: object
       description: An open position as recorded in SQLite at the last decision step
       properties:
+        basis_source:
+          type: string
+          enum: [traded, adopted, reconstructed]
+          default: traded
+          description: |
+            Where `entry_price` came from, and therefore what `unrealized_pnl_pct`
+            MEANS. `traded` — this engine opened the lot, so P&L is lifetime.
+            `adopted` — the lot already existed on the exchange when the engine
+            took the account over, so `entry_price` is the mark at `adopted_at`
+            and P&L is measured **from adoption**, not lifetime return. Render the
+            difference: an adopted lot shown as lifetime return is a wrong number,
+            not a missing one.
+        adopted_at:
+          type: string
+          nullable: true
+          description: When the engine adopted a pre-existing lot. Null for traded lots.
         symbol:
           type: string
         side:
@@ -1180,13 +1225,35 @@ components:
         as_of:
           type: string
           description: When the engine read the account (ISO 8601). Not request time.
+        currency:
+          type: string
+          default: USD
+          description: |
+            What every monetary field below is denominated in. Render it beside
+            the numbers — a real balance with no currency on it is not a figure
+            anyone should act on. The audited account's own Kraken screen reports
+            GBP while the book accounts in USD, and the two differ by ~35%.
         quote_cash:
           type: number
           nullable: true
-          description: Free USD as the exchange reported it.
+          description: |
+            Free balance of `currency` as the exchange reported it. Other fiat
+            the account holds is real money but needs a conversion to spend, so
+            it is counted in `positions_value`, not here.
+        positions_value:
+          type: number
+          nullable: true
+          description: |
+            Coins valued at the marks of the cycle that wrote the snapshot, plus
+            any non-`currency` fiat the account holds. Separate from cash because
+            on a real account the coins are usually most of the portfolio. A holding the engine could not price is
+            EXCLUDED from this figure (and logged) rather than valued at zero,
+            so when it covers fewer assets than `num_holdings`, `total_value` is
+            a floor rather than a valuation.
         total_value:
           type: number
           nullable: true
+          description: "`quote_cash` + `positions_value`. See the caveat above."
         num_holdings:
           type: integer
           nullable: true
@@ -1208,6 +1275,32 @@ components:
         one significant digit out of five). Apply the significant-digit display
         rule in FRONTEND_AGENT_CONTEXT.md rather than assuming 2dp.
       properties:
+        source:
+          type: string
+          enum: [engine, exchange]
+          default: engine
+          description: |
+            `engine` — this engine placed the order. `exchange` — read back from
+            the venue's own trade history, so it covers fills the engine never
+            made: a manual trade in the exchange app, or anything from before the
+            engine existed. A dashboard that does not distinguish them attributes
+            a hand trade to the strategy.
+        settle_currency:
+          type: string
+          nullable: true
+          description: |
+            What the fill actually settled in, when that differs from the book's
+            accounting currency — the real account has settled on GBP, EUR and USD
+            pairs. `price` is always in accounting currency; this says what it was
+            converted from. Null on an engine fill.
+        settle_fx_rate:
+          type: number
+          nullable: true
+          description: |
+            Rate used for that conversion, taken from the fill's own date rather
+            than today's. **Null on a non-accounting-currency fill means no rate
+            was available and `price` is UNCONVERTED** — flag it rather than
+            showing it beside converted numbers as if comparable.
         symbol:
           type: string
         side:

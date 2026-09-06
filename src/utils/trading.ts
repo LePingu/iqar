@@ -4,13 +4,31 @@ export function fmtPrice(x: number): string {
   return x.toFixed(Math.max(2, 2 - Math.floor(Math.log10(Math.abs(x)))));
 }
 
+export function formatMoney(value: number, currency = 'USD', decimals = 2): string {
+  try {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency,
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    }).format(value);
+  } catch {
+    return `${currency} ${value.toFixed(decimals)}`;
+  }
+}
+
+export function currencySymbol(currency = 'USD'): string {
+  try {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 })
+      .format(0)
+      .replace(/[\d.,\s\u00a0]/g, '');
+  } catch {
+    return `${currency} `;
+  }
+}
+
 export function formatCurrency(value: number, decimals = 2): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  }).format(value);
+  return formatMoney(value, 'USD', decimals);
 }
 
 export function formatPercentage(value: number, decimals = 2): string {

@@ -199,7 +199,13 @@ export interface LiveSnapshot {
   last_snapshot_ts: string;
 }
 
+export type EngineMode = 'paper' | 'real';
+
+export type BasisSource = 'traded' | 'adopted' | 'reconstructed';
+
 export interface OpenPosition {
+  basis_source?: BasisSource;
+  adopted_at?: string | null;
   symbol: string;
   side: TradeSide;
   quantity: number;
@@ -211,6 +217,9 @@ export interface OpenPosition {
 }
 
 export interface LiveFill {
+  source?: 'engine' | 'exchange';
+  settle_currency?: string | null;
+  settle_fx_rate?: number | null;
   symbol: string;
   side: TradeSide;
   price: number;
@@ -222,7 +231,9 @@ export interface LiveFill {
 
 export interface RealAccountStatus {
   as_of: string;
+  currency?: string;
   quote_cash: number | null;
+  positions_value?: number | null;
   total_value: number | null;
   num_holdings: number | null;
 }
@@ -239,6 +250,7 @@ export interface LiveBacktestDetail {
 }
 
 export interface EngineStatus {
+  mode?: EngineMode;
   session_id: string;
   trading_enabled: boolean;
   engine_alive: boolean;
@@ -255,6 +267,9 @@ export interface EngineControls {
 }
 
 export interface LiveEngineDetail {
+  mode?: EngineMode;
+  currency?: string;
+  observed_from?: string | null;
   session_id: string;
   trading_enabled: boolean;
   is_active: boolean;

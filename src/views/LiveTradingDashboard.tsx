@@ -347,8 +347,9 @@ export function LiveTradingDashboard() {
           last_snapshot_ts: liveData.last_snapshot_ts || '',
           decisions_done: 0,
           decisions_target: 0,
-        } : null} 
-        greyed={!engineAlive} 
+        } : null}
+        greyed={!engineAlive}
+        currency={liveData?.currency ?? 'USD'}
       />
 
       {/* Equity Curve */}
@@ -366,7 +367,7 @@ export function LiveTradingDashboard() {
         <GlassCard className={`flex flex-col ${!engineAlive ? 'opacity-40' : ''}`}>
           <h3 className="section-title">Recent Fills</h3>
           <div className="flex-1 overflow-y-auto">
-            <RecentFillsFeed fills={liveData?.recent_fills ?? []} />
+            <RecentFillsFeed fills={liveData?.recent_fills ?? []} currency={liveData?.currency ?? 'USD'} />
           </div>
         </GlassCard>
       </div>

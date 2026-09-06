@@ -1,13 +1,14 @@
 import { KPICard } from './KPICard';
-import { formatCurrency, formatPercentage } from '../utils/trading';
+import { formatMoney, formatPercentage } from '../utils/trading';
 import type { LiveSnapshot } from '../types/api';
 
 interface LiveKPIStripProps {
   snapshot: LiveSnapshot | null;
   greyed?: boolean;
+  currency?: string;
 }
 
-export function LiveKPIStrip({ snapshot, greyed = false }: LiveKPIStripProps) {
+export function LiveKPIStrip({ snapshot, greyed = false, currency = 'USD' }: LiveKPIStripProps) {
   const opacity = greyed ? 'opacity-40' : '';
 
   if (!snapshot) {
@@ -25,12 +26,12 @@ export function LiveKPIStrip({ snapshot, greyed = false }: LiveKPIStripProps) {
     <div className={`grid grid-cols-2 lg:grid-cols-4 gap-3 ${opacity}`}>
       <KPICard
         label="Portfolio Value"
-        value={formatCurrency(snapshot.portfolio_value)}
+        value={formatMoney(snapshot.portfolio_value, currency)}
         neutral
       />
       <KPICard
         label="P&L"
-        value={`${snapshot.pnl >= 0 ? '+' : ''}${formatCurrency(snapshot.pnl)} (${formatPercentage(snapshot.pnl_pct)})`}
+        value={`${snapshot.pnl >= 0 ? '+' : ''}${formatMoney(snapshot.pnl, currency)} (${formatPercentage(snapshot.pnl_pct)})`}
         isPositive={snapshot.pnl >= 0}
       />
       <KPICard

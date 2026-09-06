@@ -137,7 +137,17 @@ Set up the TanStack Router with these five routes. They map directly to the endp
 
 **Purpose**: Monitor and control the live trading engine. This is the operator console — it surfaces the engine kill-switch, risk limits, live positions, equity curve, and the fills feed, all in one view.
 
-**Architecture note**: The live engine writes to the same `portfolio_snapshots`, `positions`, and `trades` tables that the backtest monitor (Route D) already reads. Route E reuses those monitoring components but adds the engine-control panel on top.
+**Architecture note**: A **paper** engine writes to the same `portfolio_snapshots`, `positions`, and `trades` tables that the backtest monitor (Route D) already reads, so Route E reuses those monitoring components and adds the engine-control panel on top.
+
+> **A real engine does not.** It writes `real_positions`, `real_trades` and
+> `real_portfolio_snapshots` — a separate table set, for retention and blast
+> radius (financial records must not live in the tables that disposable backtest
+> runs churn). **The frontend does not need to care**: `GET /api/engine/{id}/detail`
+> and `/status` pick the table set from `engine_controls.mode` and serve the same
+> shapes either way. The payload tells you which it served via `mode`. What the
+> frontend *does* need to care about is the extra fields that only appear on a
+> real session — `basis_source`, `source`, `settle_currency`, `currency`,
+> `observed_from` — each described below.
 
 **Data sources** (all under the `/api/engine/*` namespace — paper/real trading is a
 **separate route family** from `/api/backtests/*`; do NOT use the backtest live
@@ -177,7 +187,16 @@ endpoints for the engine):
 
 - `LiveEquityCurve` — reuse from Route D: TradingView area chart; append points on each poll
 
-- `OpenPositionsTable` — reuse from Route D: symbol · side · qty · entry $ · current $ · unrealised P&L%
+- `OpenPositionsTable` — reuse from Route D: symbol · side · qty · entry · current · unrealised P&L%.
+  **On a real session, check `basis_source` before rendering that percentage.**
+  `traded` means this engine opened the lot, so the P&L is lifetime. `adopted`
+  means the lot already existed on the exchange when the engine took the account
+  over: `entry_price` is the *mark at `adopted_at`*, so the percentage is **P&L
+  under management**, measured from adoption — not lifetime return, and not
+  anything a tax basis would recognise. Label it (a badge, or "since
+  <adopted_at>"), because an adopted lot rendered as lifetime return is a wrong
+  number, not a missing one. A newly-adopted account is **entirely** adopted
+  lots, so this is the common case, not an edge case.
 
 - `RecentFillsFeed` — last 20 fills, newest first. **Show realized P&L on SELL
   fills**: `realized_pnl` / `realized_pnl_pct` are populated on sells and `null`
@@ -185,6 +204,20 @@ endpoints for the engine):
   entry had already lost money). Colour the same way `OpenPositionsTable` colours
   unrealised P&L, and render nothing in that column for buys — a closed trade
   should say whether it made money, which the feed previously did not.
+
+  **On a real session the feed also carries fills this engine never placed.**
+  `source` is `engine` (this engine submitted the order) or `exchange` (read back
+  from Kraken's own trade history — a manual trade in the Kraken app, or anything
+  from before the engine existed). **Distinguish them**: attributing a hand trade
+  to the strategy misreads the strategy's record. Exchange fills also carry
+  `settle_currency` — the account has settled on GBP, EUR and USD pairs — and
+  `settle_fx_rate`, the rate used to convert into the book's accounting currency,
+  taken from the fill's own date rather than today's. A **null `settle_fx_rate`
+  on a non-accounting-currency fill means no rate was available and `price` is
+  UNCONVERTED**; flag it rather than showing it beside converted numbers as if
+  comparable. Exchange fills carry no realized P&L (`0`): pairing a historical
+  sell with the buy that opened it needs a cost basis the account does not have,
+  and a computed number there would be fiction beside real ones.
 
 **When engine_alive=false**: show the control panel in a degraded state (grey badge, disabled Halt/Resume, stale KPIs greyed out). Do NOT redirect — the user needs to stay on this page to see the engine is down and to send a command when it comes back.
 
@@ -230,7 +263,13 @@ const fmtPrice = (x: number): string =>
 
 Apply it to `price`, `entry_price`, `current_price` and `quantity` everywhere —
 fills feed, positions table, tooltips. **Money totals** (portfolio value, P&L in
-quote currency) stay at 2 decimals: those are dollars, not asset prices.
+quote currency) stay at 2 decimals: those are money, not asset prices.
+
+**Do not hardcode `$`.** Every engine payload carries `currency`, and it is not
+decoration: the audited real account's own Kraken screen reports GBP while the
+book accounts in USD, and the two differ by ~35%. Render the symbol from
+`currency` and show it next to every money total. A real balance with no currency
+beside it is not a figure anyone should act on.
 
 ---
 
@@ -246,7 +285,28 @@ pretend money" and "$10,000 of real money" one dropdown apart. They should never
 be one misclick apart.
 
 **Data sources**: the same `/api/engine/{session_id}/*` family, with
-`session_id=live-real`. No new endpoints are required for the read path.
+`session_id=live-real`. No new endpoints are required for the read path — the
+endpoints resolve `engine_controls.mode` and serve the real table set, and the
+payload confirms it with `mode: "real"`.
+
+**What a real session's payload carries that a paper one does not** (all
+described in Route E; repeated here because this is the page that must get them
+right):
+
+| field | where | why it changes what you render |
+|---|---|---|
+| `mode` | detail, status | Confirms you are looking at the real book. Assert it matches the route; if `/live/real` ever receives `mode: "paper"`, that is a **hard error state**, not a fallback — show it, do not render the numbers. |
+| `currency` | detail | Denomination of every money figure. Never hardcode `$`. |
+| `basis_source` / `adopted_at` | positions | An adopted lot's P&L is measured **from adoption**, not lifetime. A freshly-adopted account is entirely adopted lots. |
+| `source` | fills | `exchange` fills were not placed by this engine — manual trades, or history predating it. |
+| `settle_currency` / `settle_fx_rate` | fills | The pair actually settled in GBP/EUR/USD; the rate is the fill's own date. Null rate on a non-accounting currency = **unconverted**. |
+| `observed_from` | detail | When the **engine started watching** — not when the account started trading. There is no equity curve before it. |
+
+**Do not draw the curve back to zero.** `observed_from` is the first snapshot the
+engine recorded. An account that has traded for two years will have a curve that
+begins the day observation began, and an axis starting at 0 or a line
+extrapolated backwards both assert a history the system does not have. Start the
+chart at `observed_from` and say so.
 
 **Components** — the four things that would have caught real incidents:
 
@@ -262,6 +322,25 @@ be one misclick apart.
   (untracked deposits and untracked positions need opposite corrections, so it
   will not guess). Show the last successful reconciliation time.
 
+  > **Cash is the smaller half of this.** The engine also reconciles *positions*
+  > against the exchange every cycle, and on a fully-deployed account that is the
+  > half that matters: the audited account reconciles cash perfectly at $0.0044
+  > vs $0.0044 while holding £1,900 of coins. Position reconciliation adopts
+  > holdings the book does not know about, and **reports — never auto-resolves —**
+  > a position the book holds that the exchange does not, because that is either
+  > an unrecorded manual sale or a failed read and those need opposite fixes.
+  > Surface the counts (`matched` / `adopted` / `unpriceable`) rather than a
+  > single green tick.
+
+- `StakedHoldingsNote` — a bonded balance **cannot be sold** without unbonding
+  first, and the exchange reports it under its own ticker (`SOL03.S` beside
+  `SOL`) which the engine merges into one lot. So a position's `quantity` is the
+  economic size, and part of it may be untradeable: on the audited account 1.148
+  of 3.658 SOL is bonded and **all** 112.9 XTZ is. The engine sizes exits to the
+  free amount and refuses outright when a lot is fully bonded. If the UI shows a
+  stop or trail on such a lot, say that it cannot execute — otherwise the screen
+  promises protection the account cannot deliver.
+
 - `RunHealthBadge` — `run_health.degraded` plus its reasons. A degraded run is one
   whose critic or ML-1 was not functioning; its numbers are not a measurement.
 
@@ -273,7 +352,19 @@ a persistent "REAL MONEY" marker in the header, and the session id always visibl
 
 **Until real trading is armed** this route will show an engine that authenticates
 and reads balances but refuses every order. That is the intended first
-deployment, not an error state — render it as healthy-but-idle.
+deployment, not an error state — render it as healthy-but-idle. In that state the
+page is a **portfolio and audit view**: adopted positions, the exchange's own fill
+history, the equity curve from the moment observation began. All of it is real;
+none of it was placed by the strategy yet.
+
+> ⚠️ **`ArmingStatePanel` has no data source.** The four switches it is specified
+> to render (`LIVE_MODE`, `LIVE_KRAKEN_ARMED`, `LIVE_KRAKEN_VALIDATE_ONLY`, the
+> per-order cap) are engine *configuration*; `mode` is now served on the status
+> payload but the other three are not persisted anywhere the tower can read.
+> **Do not infer them.** Rendering "unarmed" from an absent field, for an engine
+> that may be armed, is the more dangerous of the two errors — build the panel
+> only once the fields exist, and until then show an explicit "arming state
+> unavailable" rather than a reassuring default.
 
 ---
 

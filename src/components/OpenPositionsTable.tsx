@@ -5,6 +5,18 @@ interface OpenPositionsTableProps {
   positions: OpenPosition[];
 }
 
+function AdoptedBadge({ adoptedAt }: { adoptedAt: string | null }) {
+  const since = adoptedAt ? new Date(adoptedAt).toLocaleDateString() : 'adoption';
+  return (
+    <span
+      className="badge bg-[var(--color-blue-muted)] text-[var(--color-blue)] text-[10px] px-1.5 py-0 ml-1.5"
+      title="P&L is measured from adoption (the mark at adopted_at), not lifetime return"
+    >
+      adopted · since {since}
+    </span>
+  );
+}
+
 export function OpenPositionsTable({ positions }: OpenPositionsTableProps) {
   if (positions.length === 0) {
     return <p className="text-[var(--color-text-muted)] text-sm italic">No open positions</p>;
@@ -27,12 +39,18 @@ export function OpenPositionsTable({ positions }: OpenPositionsTableProps) {
         <tbody className="font-mono text-sm">
           {positions.map((pos, idx) => (
             <tr key={idx} className="table-row">
-              <td className="table-cell text-[var(--color-text-primary)] font-medium">{pos.symbol}</td>
+              <td className="table-cell text-[var(--color-text-primary)] font-medium">
+                {pos.symbol}
+                {pos.basis_source === 'adopted' && <AdoptedBadge adoptedAt={pos.adopted_at ?? null} />}
+              </td>
               <td className={`table-cell font-medium ${pos.side === 'BUY' ? 'text-positive' : 'text-negative'}`}>{pos.side}</td>
               <td className="table-cell text-right text-[var(--color-text-secondary)]">{fmtPrice(pos.quantity)}</td>
               <td className="table-cell text-right text-[var(--color-text-secondary)]">{fmtPrice(pos.entry_price)}</td>
               <td className="table-cell text-right text-[var(--color-text-primary)]">{fmtPrice(pos.current_price)}</td>
-              <td className={`table-cell text-right ${pos.unrealized_pnl_pct >= 0 ? 'text-positive' : 'text-negative'}`}>
+              <td
+                className={`table-cell text-right ${pos.unrealized_pnl_pct >= 0 ? 'text-positive' : 'text-negative'}`}
+                title={pos.basis_source === 'adopted' ? 'P&L under management — measured from adoption, not lifetime return' : undefined}
+              >
                 {formatPercentage(pos.unrealized_pnl_pct)}
               </td>
               <td className="table-cell text-center text-[var(--color-text-muted)]">
