@@ -279,6 +279,19 @@ export function LiveRealDashboard() {
               <KPICard label="Holdings" value={account.num_holdings ?? '—'} neutral />
             </div>
 
+            {/* Holdings vs managed positions — the gap is deliberate, not a reconciliation failure */}
+            {account.num_holdings != null &&
+              liveData?.open_positions_count != null &&
+              account.num_holdings !== liveData.open_positions_count && (
+                <p className="mt-2 text-xs text-[var(--color-text-muted)]">
+                  {account.num_holdings} exchange holdings vs {liveData.open_positions_count} managed
+                  positions — this gap is expected: balances below the dust floor are valued in
+                  equity but never become managed lots, and a staked balance reported under its own
+                  ticker (e.g. <span className="font-mono">SOL03.S</span> beside{' '}
+                  <span className="font-mono">SOL</span>) is merged into a single position.
+                </p>
+              )}
+
             {/* Exchange vs ledger drift */}
             <div className="mt-3 border-t border-[var(--color-border)] pt-3 flex flex-wrap gap-6 items-center text-sm">
               <div>

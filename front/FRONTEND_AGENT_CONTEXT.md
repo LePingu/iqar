@@ -189,14 +189,29 @@ endpoints for the engine):
 
 - `OpenPositionsTable` — reuse from Route D: symbol · side · qty · entry · current · unrealised P&L%.
   **On a real session, check `basis_source` before rendering that percentage.**
-  `traded` means this engine opened the lot, so the P&L is lifetime. `adopted`
-  means the lot already existed on the exchange when the engine took the account
-  over: `entry_price` is the *mark at `adopted_at`*, so the percentage is **P&L
-  under management**, measured from adoption — not lifetime return, and not
-  anything a tax basis would recognise. Label it (a badge, or "since
-  <adopted_at>"), because an adopted lot rendered as lifetime return is a wrong
-  number, not a missing one. A newly-adopted account is **entirely** adopted
-  lots, so this is the common case, not an edge case.
+  Three values, three different meanings:
+
+  - `traded` — this engine opened the lot. P&L is lifetime.
+  - `reconstructed` — the lot predates the engine, but the venue's own trade
+    history covered it, so `entry_price` is the **real average cost** and the
+    percentage is genuine lifetime P&L. Measured on the live account: 10 of 14
+    lots, e.g. ETH −7.9%, HYPE +123.5%, POL −77.4%.
+  - `adopted` — the lot predates the engine and history could **not** cover it
+    (no fills at all, or fills explaining too little of the balance). `entry_price`
+    is the mark at `adopted_at`, so the percentage is **P&L under management**,
+    measured from adoption — not lifetime return. **It will read 0.00% at
+    adoption and that is correct**, not a loading state.
+
+  Label the last one (a badge, or "since <adopted_at>"): an adopted lot rendered
+  as lifetime return is a wrong number, not a missing one. Do **not** label
+  `reconstructed` that way — it *is* lifetime.
+
+  **`venue_market`** is the pair the asset actually traded on — `PENGU/EUR` for a
+  position the book calls `PENGUUSD`. Internal symbols are always `<BASE>USD`
+  because the analytics stack is USD-denominated and the symbol names a price
+  *series*, not a settlement pair. Show it as the reference that ties a position
+  back to the exchange statement; the live account's positions were bought on
+  `ETH/GBP`, `SOL/GBP`, `PENGU/EUR`, `HYPE/EUR` and the legacy `MATICGBP`.
 
 - `RecentFillsFeed` — last 20 fills, newest first. **Show realized P&L on SELL
   fills**: `realized_pnl` / `realized_pnl_pct` are populated on sells and `null`
@@ -218,6 +233,13 @@ endpoints for the engine):
   comparable. Exchange fills carry no realized P&L (`0`): pairing a historical
   sell with the buy that opened it needs a cost basis the account does not have,
   and a computed number there would be fiction beside real ones.
+
+  **Show the native price beside the converted one.** `price` is in the accounting
+  currency; `settle_price` is what the venue actually reported, in
+  `settle_currency`, on `venue_market`. So a PENGU buy renders as *USD 0.007037
+  (EUR 0.006104 on PENGU/EUR @ 1.15293)* — the parenthesised half is the figure an
+  operator can check against their Kraken statement, and the only one that will
+  match it.
 
 **When engine_alive=false**: show the control panel in a degraded state (grey badge, disabled Halt/Resume, stale KPIs greyed out). Do NOT redirect — the user needs to stay on this page to see the engine is down and to send a command when it comes back.
 
@@ -301,6 +323,15 @@ right):
 | `source` | fills | `exchange` fills were not placed by this engine — manual trades, or history predating it. |
 | `settle_currency` / `settle_fx_rate` | fills | The pair actually settled in GBP/EUR/USD; the rate is the fill's own date. Null rate on a non-accounting currency = **unconverted**. |
 | `observed_from` | detail | When the **engine started watching** — not when the account started trading. There is no equity curve before it. |
+
+> **`/real/account` `num_holdings` will not equal `/detail` `open_positions_count`,
+> and that is correct.** Measured on the live account: **18 holdings, 14
+> positions**. Two reasons, both deliberate — (a) balances below the dust floor
+> are valued in equity but never become managed lots (3 of them), and (b) a
+> staked balance is reported by the exchange under its own ticker (`SOL03.S`
+> beside `SOL`) and merged into **one** position, since it is one asset. If the
+> UI shows both numbers, explain the gap rather than letting it read as a
+> reconciliation failure. `total_value` on both endpoints *does* agree.
 
 **Do not draw the curve back to zero.** `observed_from` is the first snapshot the
 engine recorded. An account that has traded for two years will have a curve that

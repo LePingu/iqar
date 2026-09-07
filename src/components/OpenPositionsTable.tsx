@@ -40,8 +40,18 @@ export function OpenPositionsTable({ positions }: OpenPositionsTableProps) {
           {positions.map((pos, idx) => (
             <tr key={idx} className="table-row">
               <td className="table-cell text-[var(--color-text-primary)] font-medium">
-                {pos.symbol}
-                {pos.basis_source === 'adopted' && <AdoptedBadge adoptedAt={pos.adopted_at ?? null} />}
+                <div className="flex items-center">
+                  {pos.symbol}
+                  {pos.basis_source === 'adopted' && <AdoptedBadge adoptedAt={pos.adopted_at ?? null} />}
+                </div>
+                {pos.venue_market && (
+                  <div
+                    className="text-[10px] text-[var(--color-text-muted)] font-normal"
+                    title="The venue pair this asset actually traded on — the reference that ties this position back to the exchange statement"
+                  >
+                    {pos.venue_market}
+                  </div>
+                )}
               </td>
               <td className={`table-cell font-medium ${pos.side === 'BUY' ? 'text-positive' : 'text-negative'}`}>{pos.side}</td>
               <td className="table-cell text-right text-[var(--color-text-secondary)]">{fmtPrice(pos.quantity)}</td>
@@ -49,7 +59,7 @@ export function OpenPositionsTable({ positions }: OpenPositionsTableProps) {
               <td className="table-cell text-right text-[var(--color-text-primary)]">{fmtPrice(pos.current_price)}</td>
               <td
                 className={`table-cell text-right ${pos.unrealized_pnl_pct >= 0 ? 'text-positive' : 'text-negative'}`}
-                title={pos.basis_source === 'adopted' ? 'P&L under management — measured from adoption, not lifetime return' : undefined}
+                title={pos.basis_source === 'adopted' ? 'P&L under management — measured from adoption (the mark at adopted_at), not lifetime return. 0.00% at adoption is correct, not a loading state.' : undefined}
               >
                 {formatPercentage(pos.unrealized_pnl_pct)}
               </td>

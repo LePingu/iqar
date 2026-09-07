@@ -1,5 +1,5 @@
 import type { LiveFill } from '../types/api';
-import { fmtPrice, formatMoney, formatPercentage } from '../utils/trading';
+import { fmtPrice, formatMoney, formatPercentage, currencySymbol } from '../utils/trading';
 
 interface RecentFillsFeedProps {
   fills: LiveFill[];
@@ -22,6 +22,10 @@ export function RecentFillsFeed({ fills, frozen = false, currency = 'USD' }: Rec
           fill.settle_fx_rate == null;
         const showRealizedPnl =
           fill.side === 'SELL' && !isExchange && fill.realized_pnl != null;
+        const showNativePrice =
+          fill.settle_price != null &&
+          fill.settle_currency != null &&
+          fill.settle_currency !== currency;
 
         return (
           <div key={idx} className="flex flex-col gap-0.5 px-3 py-2 rounded-md bg-[var(--color-bg-hover)] border border-[var(--color-border)]">
@@ -47,18 +51,24 @@ export function RecentFillsFeed({ fills, frozen = false, currency = 'USD' }: Rec
                     {(fill.realized_pnl ?? 0) >= 0 ? '+' : ''}{formatMoney(fill.realized_pnl ?? 0, currency)} ({formatPercentage(fill.realized_pnl_pct ?? 0, 1)})
                   </span>
                 )}
-                <span className="text-[var(--color-text-primary)]">{fmtPrice(fill.price)}</span>
+                <span className="text-[var(--color-text-primary)]">
+                  {currencySymbol(currency)}{fmtPrice(fill.price)}
+                </span>
                 <span className="text-[var(--color-text-muted)] text-xs w-18 text-right">
                   {new Date(fill.timestamp).toLocaleTimeString()}
                 </span>
               </div>
             </div>
-            {(fill.settle_currency != null || unconverted) && (
-              <div className="flex items-center gap-2 text-[10px]">
-                {fill.settle_currency != null && (
-                  <span className="text-[var(--color-text-muted)]">
-                    settled in {fill.settle_currency}
-                    {fill.settle_fx_rate != null && ` · fx {fill.settle_fx_rate}`}
+            {(showNativePrice || unconverted) && (
+              <div className="flex items-center gap-2 text-[10px] flex-wrap">
+                {showNativePrice && (
+                  <span
+                    className="text-[var(--color-text-muted)]"
+                    title="Price as the venue reported it — the figure an operator can check against their exchange statement"
+                  >
+                    ({fill.settle_currency} {fmtPrice(fill.settle_price ?? 0)}
+                    {fill.venue_market && ` on ${fill.venue_market}`}
+                    {fill.settle_fx_rate != null && ` @ ${fill.settle_fx_rate}`})
                   </span>
                 )}
                 {unconverted && (

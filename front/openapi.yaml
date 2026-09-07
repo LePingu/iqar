@@ -1175,6 +1175,16 @@ components:
           type: string
           nullable: true
           description: When the engine adopted a pre-existing lot. Null for traded lots.
+        venue_market:
+          type: string
+          nullable: true
+          description: |
+            The venue pair this asset actually traded on — `PENGU/EUR` for a
+            position the book calls `PENGUUSD`. Internal symbols are always
+            `<BASE>USD` because the analytics stack is USD-denominated and the
+            symbol names a price *series*, not a settlement pair. Show this as the
+            reference an operator can tie back to their exchange statement. Null
+            for engine-opened lots, which settled in the accounting currency.
         symbol:
           type: string
         side:
@@ -1301,6 +1311,18 @@ components:
             than today's. **Null on a non-accounting-currency fill means no rate
             was available and `price` is UNCONVERTED** — flag it rather than
             showing it beside converted numbers as if comparable.
+        venue_market:
+          type: string
+          nullable: true
+          description: The venue pair the money moved through, e.g. `PENGU/EUR`.
+        settle_price:
+          type: number
+          nullable: true
+          description: |
+            Price as the venue reported it, in `settle_currency`, before
+            conversion — e.g. `0.0334` for a PENGU/EUR fill whose `price` is the
+            USD equivalent. Show it beside `price` as the figure an operator can
+            check against their exchange statement.
         symbol:
           type: string
         side:

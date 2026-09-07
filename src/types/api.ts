@@ -206,6 +206,7 @@ export type BasisSource = 'traded' | 'adopted' | 'reconstructed';
 export interface OpenPosition {
   basis_source?: BasisSource;
   adopted_at?: string | null;
+  venue_market?: string | null;
   symbol: string;
   side: TradeSide;
   quantity: number;
@@ -220,6 +221,8 @@ export interface LiveFill {
   source?: 'engine' | 'exchange';
   settle_currency?: string | null;
   settle_fx_rate?: number | null;
+  venue_market?: string | null;
+  settle_price?: number | null;
   symbol: string;
   side: TradeSide;
   price: number;
