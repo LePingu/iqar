@@ -206,6 +206,16 @@ endpoints for the engine):
   as lifetime return is a wrong number, not a missing one. Do **not** label
   `reconstructed` that way — it *is* lifetime.
 
+  > **One symbol can now have SEVERAL rows.** An adopted holding is rebuilt as
+  > its individual **FIFO lots**, each keeping the price and date it was actually
+  > bought at — measured on the live account, 14 holdings become **26 lots**
+  > (ETH 5, SOL 3, XLM 3). That is deliberate: the rest of the strategy is
+  > lot-based, so a stop applies per lot rather than to a blend of buys spanning
+  > (for PENGU) a 3× price range. **Group by `symbol` in the table** and show the
+  > lots underneath, or the list reads as duplicates. A lot flagged `adopted`
+  > sitting beside `reconstructed` lots of the same symbol is the quantity no buy
+  > explains — a staking accrual or an airdrop — priced at the mark.
+
   **`venue_market`** is the pair the asset actually traded on — `PENGU/EUR` for a
   position the book calls `PENGUUSD`. Internal symbols are always `<BASE>USD`
   because the analytics stack is USD-denominated and the symbol names a price
@@ -398,6 +408,66 @@ none of it was placed by the strategy yet.
 > unavailable" rather than a reassuring default.
 
 ---
+
+### G. Daily Evaluation (`/live/evaluation`)
+
+Answers one question — *is this book beating an equal-weight hold of what it
+trades?* — and hands the operator a file they can paste elsewhere. The tower
+computes it nightly; this view shows the latest and lets you force a fresh one.
+
+**Endpoints**: `POST /api/evaluation/{session_id}/run` ·
+`GET /api/evaluation/{session_id}/latest` · `GET .../history` ·
+`GET /api/evaluation/reports/{id}/download`
+
+**The button.** One primary action, *Run evaluation now*. Three things matter:
+
+1. **It is slow on purpose** — it walks hourly exchange bars for every symbol the
+   session traded, so budget 20–60s. Use a determinate pending state with the
+   elapsed time, not a spinner that looks hung. Disable the button while in
+   flight; do not let a second click queue a second run.
+2. **It is a control action**, same bar as halting the engine. Hide it (don't
+   just disable it) when `GET /api/auth/me` returns `can_control: false` — a
+   read-only viewer still sees the latest report, just not the button.
+3. **`200` does not mean success.** If the exchange was unreachable the report is
+   still stored and still returns `200`, with `error` set and `capture_ratio:
+   null`. Render the error; never fall back to `0`.
+
+**Reading the result.** Lead with `capture_ratio` — system return ÷ equal-weight
+hold of the symbols actually traded. Above 1.0 is positive alpha; 0.50 is the
+project's bull gate. Beside it, `return_pct` and `benchmark_pct` so the ratio is
+legible rather than magic.
+
+> **Null is not zero, anywhere in this payload.** `return_pct`,
+> `benchmark_pct` and `capture_ratio` are all nullable, and a null means *we could
+> not measure*, not *it was flat*. Render an em-dash and the reason. This is the
+> single most important rule on this screen: the analysis it replaces went wrong
+> twice by treating an unmeasured window as a measured zero.
+
+Also surface, because each is a finding rather than a statistic:
+
+- **`checks_failed`** — a count of failing invariants. Non-zero is a badge, not a
+  footnote; the per-check detail is in `payload.checks` as `{name, passed,
+  detail}`. These catch things like the position cap being breached or
+  `realized_pnl` never being written.
+- **`payload.discontinuities`** — book rebuilds inside the window (cash moved
+  with no fill behind it). When present, say plainly that measurement starts
+  *after* the last one, because a return read across a rebuild is meaningless.
+- **`payload.exposure_ceiling_pct`** — max slots × typical lot, as a share of the
+  book. Below ~100% the engine physically cannot deploy its cash; worth a warning
+  chip when it is low.
+- **`payload.exit_paths`** and **`payload.symbols`** — small tables, render as-is.
+
+**The digest.** `digest` is markdown sized to paste into a chat message. Give it
+both affordances: a copy-to-clipboard button, and a download link pointing
+straight at `/api/evaluation/reports/{id}/download` (it already sets
+`Content-Disposition` with a sensible filename — do not fetch and re-wrap it).
+
+**History.** `GET .../history` returns summaries only — no digest, no payload —
+so it is cheap to chart. A sparkline of `capture_ratio` over time is the point of
+storing them: one reading is a number, a month of them is a trend.
+
+**Empty state.** `GET .../latest` returns `404` when nothing has been run yet.
+Prompt the operator to run one. Do not render zeros.
 
 ## 5. Connecting the Frontend to the Backend
 

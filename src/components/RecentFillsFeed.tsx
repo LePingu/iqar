@@ -22,10 +22,10 @@ export function RecentFillsFeed({ fills, frozen = false, currency = 'USD' }: Rec
           fill.settle_fx_rate == null;
         const showRealizedPnl =
           fill.side === 'SELL' && !isExchange && fill.realized_pnl != null;
-        const showNativePrice =
-          fill.settle_price != null &&
-          fill.settle_currency != null &&
-          fill.settle_currency !== currency;
+        const showNativePrice = fill.settle_price != null && fill.settle_currency != null;
+        const showSettleInfo =
+          (fill.settle_currency != null && fill.settle_currency !== currency) ||
+          fill.venue_market != null;
 
         return (
           <div key={idx} className="flex flex-col gap-0.5 px-3 py-2 rounded-md bg-[var(--color-bg-hover)] border border-[var(--color-border)]">
@@ -59,7 +59,7 @@ export function RecentFillsFeed({ fills, frozen = false, currency = 'USD' }: Rec
                 </span>
               </div>
             </div>
-            {(showNativePrice || unconverted) && (
+            {(showNativePrice || showSettleInfo || unconverted) && (
               <div className="flex items-center gap-2 text-[10px] flex-wrap">
                 {showNativePrice && (
                   <span
@@ -69,6 +69,13 @@ export function RecentFillsFeed({ fills, frozen = false, currency = 'USD' }: Rec
                     ({fill.settle_currency} {fmtPrice(fill.settle_price ?? 0)}
                     {fill.venue_market && ` on ${fill.venue_market}`}
                     {fill.settle_fx_rate != null && ` @ ${fill.settle_fx_rate}`})
+                  </span>
+                )}
+                {!showNativePrice && showSettleInfo && (
+                  <span className="text-[var(--color-text-muted)]">
+                    settled in {fill.settle_currency ?? currency}
+                    {fill.venue_market && ` on ${fill.venue_market}`}
+                    {fill.settle_fx_rate != null && ` @ ${fill.settle_fx_rate}`}
                   </span>
                 )}
                 {unconverted && (

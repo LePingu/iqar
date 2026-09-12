@@ -584,6 +584,141 @@ paths:
         '404':
           description: Session not found
 
+  /api/evaluation/{session_id}/run:
+    post:
+      tags:
+        - Evaluation
+      summary: Run a live self-evaluation now
+      description: |
+        Measures the session's book against an equal-weight hold of the symbols it
+        actually traded, using hourly closes fetched fresh from the exchange at
+        request time.
+
+        **This is the button.** It takes tens of seconds — it walks hourly bars for
+        every symbol the session traded — so render a pending state rather than a
+        spinner that looks hung. The response carries `digest`, a markdown summary
+        sized to paste into a chat or an issue; offer it as both copy-to-clipboard
+        and a download via `/api/evaluation/reports/{id}/download`.
+
+        Prices are fetched fresh on every run, never reused from the engine's own
+        decision traces: those sample the market only when the engine happens to run
+        a cycle, and a benchmark measured on the system's own clock is not a
+        benchmark.
+
+        The report is stored either way. If the exchange is unreachable, the response
+        is still `200` with `error` set and `capture_ratio: null` — render the error,
+        and never substitute `0` for a missing measurement.
+
+        Requires a control user (same bar as halting the engine).
+      parameters:
+        - in: path
+          name: session_id
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: window_days
+          required: false
+          description: Days of history to evaluate. Defaults to TOWER_EVAL_WINDOW_DAYS (30).
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 120
+      responses:
+        '200':
+          description: Evaluation complete (check `error` — it may be a recorded failure)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvaluationReportResponse'
+        '403':
+          description: Not a control user
+        '422':
+          description: window_days out of range
+
+  /api/evaluation/{session_id}/latest:
+    get:
+      tags:
+        - Evaluation
+      summary: Most recent stored evaluation
+      description: |
+        Reads back the last report without recomputing. `404` means none has been
+        run yet — prompt the operator to run one rather than rendering zeros.
+      parameters:
+        - in: path
+          name: session_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The stored report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvaluationReportResponse'
+        '404':
+          description: No evaluation stored for this session yet
+
+  /api/evaluation/{session_id}/history:
+    get:
+      tags:
+        - Evaluation
+      summary: Headline figures over time
+      description: |
+        Summaries only — no `digest`, no `payload` — so the list stays small enough
+        to chart. One capture ratio is a number; a month of them is a trend, which
+        is the point of keeping them.
+      parameters:
+        - in: path
+          name: session_id
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 365
+            default: 30
+      responses:
+        '200':
+          description: Newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EvaluationSummary'
+
+  /api/evaluation/reports/{report_id}/download:
+    get:
+      tags:
+        - Evaluation
+      summary: Download one evaluation as a markdown file
+      description: |
+        Returns the digest as `text/markdown` with a `Content-Disposition`
+        attachment header, named `evaluation_<session>_<timestamp>.md`. Link to it
+        directly; no need to fetch and re-wrap it in the client.
+      parameters:
+        - in: path
+          name: report_id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: The digest
+          content:
+            text/markdown:
+              schema:
+                type: string
+        '404':
+          description: No such report
+
+
 components:
   schemas:
     EngineStatus:
@@ -1415,3 +1550,118 @@ components:
           $ref: '#/components/schemas/Metrics'
           nullable: true
           description: Non-null only after the run completes and portfolio_summary.json is written
+
+    EvaluationSummary:
+      type: object
+      description: |
+        Headline figures of one stored evaluation — enough for a history row or a
+        card, without the full payload.
+
+        **Every numeric field is nullable and that is load-bearing.** A window whose
+        benchmark venue was unreachable still produces a valid report; it simply
+        cannot state a capture ratio. Rendering `null` as `0` would turn "not
+        measured" into "measured as zero", which is the exact failure this whole
+        endpoint exists to stop.
+      properties:
+        id:
+          type: integer
+        session_id:
+          type: string
+        mode:
+          type: string
+          enum: [paper, real]
+          description: Which table set this evaluation read.
+        trigger:
+          type: string
+          enum: [scheduled, manual]
+        generated_at:
+          type: string
+          format: date-time
+        window_start:
+          type: string
+          format: date-time
+        window_end:
+          type: string
+          format: date-time
+        return_pct:
+          type: number
+          nullable: true
+          description: Book return over the measured stretch, in percent.
+        benchmark_pct:
+          type: number
+          nullable: true
+          description: Equal-weight hold of the symbols actually traded, in percent.
+        capture_ratio:
+          type: number
+          nullable: true
+          description: |
+            `return_pct / benchmark_pct`. The roadmap's G6 gate is 0.50 in bull;
+            above 1.0 is positive alpha. Null when there was no benchmark coverage.
+            When `benchmark_pct` is near zero this is a small number over a small
+            number — the report's own notes say so; surface the percentage-point
+            difference instead.
+        checks_failed:
+          type: integer
+          description: Count of failing invariants (position cap, realized_pnl written, etc).
+        error:
+          type: string
+          nullable: true
+          description: Why this run could not measure. Present means the row is a recorded failure.
+      required: [id, session_id, mode, trigger, generated_at, window_start, window_end, checks_failed]
+
+    EvaluationReportResponse:
+      type: object
+      description: |
+        A full evaluation — every EvaluationSummary field, plus the pasteable digest
+        and the structured payload behind it.
+
+        Written out in full rather than composed with `allOf` so the published
+        contract lists the properties a client actually receives; the drift test
+        that guards this file compares declared properties field-by-field.
+      properties:
+        id:
+          type: integer
+        session_id:
+          type: string
+        mode:
+          type: string
+          enum: [paper, real]
+        trigger:
+          type: string
+          enum: [scheduled, manual]
+        generated_at:
+          type: string
+          format: date-time
+        window_start:
+          type: string
+          format: date-time
+        window_end:
+          type: string
+          format: date-time
+        return_pct:
+          type: number
+          nullable: true
+        benchmark_pct:
+          type: number
+          nullable: true
+        capture_ratio:
+          type: number
+          nullable: true
+          description: Null when there was no benchmark coverage. Never render null as 0.
+        checks_failed:
+          type: integer
+        error:
+          type: string
+          nullable: true
+        digest:
+          type: string
+          description: |
+            Markdown summary, sized to paste into a chat message. This is what
+            /api/evaluation/reports/{id}/download serves as a file.
+        payload:
+          type: object
+          additionalProperties: true
+          description: |
+            The structured report: segment, discontinuities, per-symbol
+            participation, exit-path forward returns, and the invariant checks.
+      required: [id, session_id, mode, trigger, generated_at, window_start, window_end, checks_failed, digest]
