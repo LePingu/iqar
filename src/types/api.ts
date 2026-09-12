@@ -286,3 +286,52 @@ export interface LiveEngineDetail {
   recent_fills: LiveFill[];
   equity_curve: EquityPoint[];
 }
+
+// --- Evaluation (Route G) ---
+
+export type EvaluationTrigger = 'scheduled' | 'manual';
+
+export interface EvaluationCheck {
+  name: string;
+  passed: boolean;
+  detail?: string | null;
+}
+
+/**
+ * Headline figures of one stored evaluation. Every numeric field is nullable
+ * and that is load-bearing: null means "could not measure", never "measured
+ * as zero".
+ */
+export interface EvaluationSummary {
+  id: number;
+  session_id: string;
+  mode: EngineMode;
+  trigger: EvaluationTrigger;
+  generated_at: string;
+  window_start: string;
+  window_end: string;
+  return_pct: number | null;
+  benchmark_pct: number | null;
+  capture_ratio: number | null;
+  checks_failed: number;
+  error?: string | null;
+}
+
+/**
+ * The structured report behind the digest. Served as a free-form object by
+ * the API; the known members are typed for convenience and everything else
+ * passes through untouched.
+ */
+export interface EvaluationPayload {
+  checks?: EvaluationCheck[];
+  discontinuities?: unknown[];
+  exposure_ceiling_pct?: number | null;
+  exit_paths?: Record<string, unknown>[];
+  symbols?: Record<string, unknown>[];
+  [key: string]: unknown;
+}
+
+export interface EvaluationReportResponse extends EvaluationSummary {
+  digest: string;
+  payload: EvaluationPayload;
+}

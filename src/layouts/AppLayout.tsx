@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Outlet, Link } from '@tanstack/react-router';
-import { FiActivity, FiServer, FiTrendingUp, FiRadio, FiMenu, FiX, FiAlertTriangle } from 'react-icons/fi';
+import { FiActivity, FiServer, FiTrendingUp, FiRadio, FiMenu, FiX, FiAlertTriangle, FiBarChart2 } from 'react-icons/fi';
 import { useRole } from '../contexts/RoleContext';
 import logoUrl from '../assets/iqar_logo.png';
 
@@ -18,6 +18,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/backtests/live', label: 'Live Monitor', icon: <FiActivity size={18} />, adminOnly: true },
   { to: '/live', label: 'Live Trading', icon: <FiRadio size={18} />, exact: true },
   { to: '/live/real', label: 'Real Money', icon: <FiAlertTriangle size={18} />, adminOnly: true },
+  { to: '/live/evaluation', label: 'Evaluation', icon: <FiBarChart2 size={18} /> },
 ];
 
 export function AppLayout() {

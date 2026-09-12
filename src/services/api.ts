@@ -13,6 +13,8 @@ import type {
   EngineControls,
   LiveEngineDetail,
   RealAccountStatus,
+  EvaluationReportResponse,
+  EvaluationSummary,
 } from '../types/api';
 
 const API_BASE = '/api';
@@ -99,4 +101,23 @@ export const api = {
         ? `/engine/real/account?session_id=${encodeURIComponent(sessionId)}`
         : '/engine/real/account',
     ),
+
+  // Evaluation (Route G)
+  // Slow on purpose — walks hourly exchange bars for every symbol the
+  // session traded. Budget 20–60s; the caller must render a pending state.
+  runEvaluation: (sessionId: string, windowDays?: number) =>
+    fetchJson<EvaluationReportResponse>(
+      `/evaluation/${sessionId}/run${windowDays != null ? `?window_days=${windowDays}` : ''}`,
+      { method: 'POST' },
+    ),
+
+  getLatestEvaluation: (sessionId: string) =>
+    fetchJson<EvaluationReportResponse>(`/evaluation/${sessionId}/latest`),
+
+  getEvaluationHistory: (sessionId: string, limit = 30) =>
+    fetchJson<EvaluationSummary[]>(`/evaluation/${sessionId}/history?limit=${limit}`),
+
+  // Direct link only — the endpoint sets Content-Disposition itself.
+  evaluationDownloadUrl: (reportId: number) =>
+    `${API_BASE}/evaluation/reports/${reportId}/download`,
 };
