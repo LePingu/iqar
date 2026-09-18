@@ -16,6 +16,8 @@ tags:
     description: Backtest execution and historical review
   - name: Engine
     description: Live trading engine control (halt / resume / risk limits)
+  - name: Oracle
+    description: Read-only lineage for agents and service tokens (lots, fills, traces, logs); every read is audited
 
 paths:
   /api/system/status:
@@ -93,41 +95,84 @@ paths:
     post:
       tags:
         - Backtest
-      summary: Launch a new backtest
+      summary: Queue one named, reviewed F2 backtest condition
+      description: |
+        The caller selects a preset and variant shown by `GET /api/backtests/presets`.
+        Raw CLI flags, paths, image references, provider settings and data locations are
+        never accepted from the browser. An operator confirmation in the UI is the launch
+        approval; Tower records the request durably and the single Compose worker claims it.
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/BacktestConfig'
+              $ref: '#/components/schemas/BacktestLaunchRequest'
       responses:
         '202':
-          description: Backtest job accepted
+          description: Backtest job accepted into the durable queue
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  job_id:
-                    type: string
-                  status:
-                    type: string
+                $ref: '#/components/schemas/BacktestLaunchAccepted'
+        '401':
+          description: Missing or invalid Cloudflare Access token
+        '403':
+          description: Authenticated user is not an engine-control operator
+        '409':
+          description: CSV dataset is not mounted or registered on the host
+        '422':
+          description: Unknown condition or browser-supplied fields
+
+  /api/backtests/presets:
+    get:
+      tags:
+        - Backtest
+      summary: List named F2 conditions and server execution limits
+      responses:
+        '200':
+          description: Conditions the UI may present for explicit operator confirmation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BacktestPresetInfo'
+
+  /api/backtests/jobs/{job_id}/comparison:
+    get:
+      tags:
+        - Backtest
+      summary: Read the recorded comparison for a terminal backtest result
+      parameters:
+        - in: path
+          name: job_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Baseline/current comparison recorded by the worker
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BacktestComparison'
+        '404':
+          description: Job or comparison artifact is unavailable
+        '409':
+          description: Job has not reached a terminal result state
 
   /api/backtests/jobs/{job_id}:
     get:
       tags:
         - Backtest
-      summary: Poll progress of a running or completed backtest job
+      summary: Poll durable queued, running, interrupted, or completed job state
       description: |
-        Reads the `backtest_runs` row (status, config, error) plus a `portfolio_snapshots`
-        count for progress. job_id == run_id (no separate job manager yet).
-        Returns 404 only when the run was never created (no `backtest_runs` row) — a run
-        that just started (0 decisions yet) still returns 200, since the row is created
-        before the trading loop begins, not after it finishes.
-        `progress_pct` = snap_count / target_decisions × 100 (0–100).
-        `status` is `failed` with `error` populated if the run raised; `completed` once
-        done; `running` while in progress and still writing snapshots.
-        Use `GET /api/backtests/live/{run_id}` for richer live data (positions, fills, equity curve).
+        Tower creates a `backtest_jobs` record before the worker starts. A queued job has
+        no `run_id`; once the worker claims it, it records `run_id` before the runner writes
+        its first snapshot. Use `GET /api/backtests/live/{run_id}` for positions, fills and
+        equity while the job is running. `progress_pct` is snapshot count divided by target
+        decisions when a run record exists. A worker restart marks in-flight work
+        `interrupted`; it is never automatically retried.
       parameters:
         - in: path
           name: job_id
@@ -624,6 +669,23 @@ paths:
             type: integer
             minimum: 1
             maximum: 120
+        - in: query
+          name: since
+          required: false
+          description: |
+            Start of an explicit range. Overrides `window_days`: use it to measure
+            one specific stretch (a run between two deployments) rather than "the
+            last N days". The range may not exceed 120 days.
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: until
+          required: false
+          description: End of an explicit range. Defaults to now.
+          schema:
+            type: string
+            format: date-time
       responses:
         '200':
           description: Evaluation complete (check `error` — it may be a recorded failure)
@@ -634,7 +696,7 @@ paths:
         '403':
           description: Not a control user
         '422':
-          description: window_days out of range
+          description: window_days out of range, since after until, or a range wider than 120 days
 
   /api/evaluation/{session_id}/latest:
     get:
@@ -717,6 +779,311 @@ paths:
                 type: string
         '404':
           description: No such report
+
+  # ── Oracle: read-only lineage for machine identities ────────────────────
+  /api/oracle/sessions:
+    get:
+      tags:
+        - Oracle
+      summary: Discover engine sessions
+      description: |
+        The oracle's entry point. Read-only by construction: no oracle route
+        writes money state, queues a command or reaches an exchange. Every
+        served request writes one audit row (identity, route, filters, rows
+        returned); a read that cannot be audited is refused.
+
+        Auth: any Access-authenticated identity — a human login or a Cloudflare
+        Access **service token** (the oracle's reason to exist). Service
+        identities can read here and are rejected by every control endpoint.
+      responses:
+        '200':
+          description: One entry per engine session
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OracleSessionSummary'
+        '401':
+          description: Missing or invalid Access token
+  /api/oracle/{session_id}/lots:
+    get:
+      tags:
+        - Oracle
+      summary: The lot ledger, paginated
+      description: |
+        Lots of the session's own position table (paper or real_*). Filter by
+        symbol and open/closed; the page is bounded.
+      parameters:
+        - in: path
+          name: session_id
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: symbol
+          required: false
+          description: Filter by one symbol, e.g. MINAUSD
+          schema:
+            type: string
+        - in: query
+          name: status
+          required: false
+          description: "'open', 'closed', or all (default)"
+          schema:
+            type: string
+            enum: [open, closed]
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 100
+        - in: query
+          name: offset
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: A page of lots
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OracleLotsResponse'
+        '404':
+          description: Unknown session
+  /api/oracle/{session_id}/lots/{lot_id}/lineage:
+    get:
+      tags:
+        - Oracle
+      summary: One lot, its fills, and where its reasoning lives
+      description: |
+        The lot row (regime at both ends, stop state, basis), its fills, and
+        the decision-trace files being written while it was open — the DB says
+        WHAT happened to the lot, the traces say WHY.
+      parameters:
+        - in: path
+          name: session_id
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: lot_id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: The lineage
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LotLineage'
+        '404':
+          description: Unknown session, or no such lot in it
+  /api/oracle/{session_id}/traces:
+    get:
+      tags:
+        - Oracle
+      summary: Which decision-trace files exist for the session
+      parameters:
+        - in: path
+          name: session_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Trace files, newest last
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TraceFileInfo'
+        '404':
+          description: Unknown session
+  /api/oracle/{session_id}/traces/records:
+    get:
+      tags:
+        - Oracle
+      summary: Slimmed decision-trace records, filtered and capped
+      description: |
+        Scans the session's trace files newest-first up to a fixed line cap,
+        drops bulk fields, and returns at most `limit` matching records.
+        `truncated` says the cap was hit before the files were exhausted.
+      parameters:
+        - in: path
+          name: session_id
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: symbol
+          required: false
+          description: Keep only records about this symbol
+          schema:
+            type: string
+        - in: query
+          name: record_type
+          required: false
+          description: Keep only this record type
+          schema:
+            type: string
+            enum: [LLM_PROMPT, ALGO_INPUT, DECISION, ERROR]
+        - in: query
+          name: since
+          required: false
+          description: ISO 8601 lower bound (URL-encode the offset)
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: until
+          required: false
+          description: ISO 8601 upper bound
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - in: query
+          name: keep_prompts
+          required: false
+          description: Keep LLM prompt text (capped per prompt). Default drops it.
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Matching records
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TraceRecordsResponse'
+        '404':
+          description: Unknown session
+        '422':
+          description: since does not precede until, or a bound is out of range
+  /api/oracle/{session_id}/llm-calls:
+    get:
+      tags:
+        - Oracle
+      summary: Recent LLM calls from the shared call log
+      description: |
+        The call log is shared by every engine process and carries no session
+        id, so the answer is filtered by symbol/agent only — never by session.
+      parameters:
+        - in: path
+          name: session_id
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: symbol
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: agent
+          required: false
+          description: e.g. pattern_detector, position_manager
+          schema:
+            type: string
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+      responses:
+        '200':
+          description: Recent entries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LlmCallsResponse'
+        '404':
+          description: Unknown session
+  /api/oracle/{session_id}/continuity:
+    get:
+      tags:
+        - Oracle
+      summary: Snapshot continuity — coverage, gaps, lying rows
+      parameters:
+        - in: path
+          name: session_id
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: gap_minutes
+          required: false
+          description: A stretch longer than this with no snapshot is reported as a gap
+          schema:
+            type: number
+            minimum: 1
+            maximum: 1440
+            default: 30
+        - in: query
+          name: days
+          required: false
+          description: Window to cover
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 120
+            default: 30
+      responses:
+        '200':
+          description: The continuity report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContinuityReport'
+        '404':
+          description: Unknown session
+  /api/oracle/{session_id}/log:
+    get:
+      tags:
+        - Oracle
+      summary: Bounded tail of the session's newest engine log
+      parameters:
+        - in: path
+          name: session_id
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: lines
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 100
+      responses:
+        '200':
+          description: The last lines
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogTailResponse'
+        '404':
+          description: Unknown session, or no engine log for it yet
 
 
 components:
@@ -1106,22 +1473,115 @@ components:
         pm_take_profit:
           type: number
 
-    BacktestJobStatus:
+    BacktestLaunchRequest:
       type: object
+      additionalProperties: false
+      required: [preset, variant]
+      properties:
+        preset:
+          type: string
+          example: f2
+        variant:
+          type: string
+          example: rotation-off
+
+    BacktestPresetInfo:
+      type: object
+      required: [preset, variant, description, parameters, historical_baseline_run_id, estimated_minutes_min, estimated_minutes_max, max_parallel]
+      properties:
+        preset:
+          type: string
+        variant:
+          type: string
+        description:
+          type: string
+        parameters:
+          type: object
+          additionalProperties:
+            type: string
+        historical_baseline_run_id:
+          type: string
+        estimated_minutes_min:
+          type: integer
+        estimated_minutes_max:
+          type: integer
+        max_parallel:
+          type: integer
+          description: Current host limit; the UI must not imply additional parallel capacity.
+
+    BacktestLaunchAccepted:
+      type: object
+      required: [job_id, status, preset, variant, dataset_id, historical_baseline_run_id, estimated_minutes_min, estimated_minutes_max, max_parallel]
       properties:
         job_id:
           type: string
         status:
           type: string
-          enum: [queued, running, completed, failed]
+          enum: [queued]
+        preset:
+          type: string
+        variant:
+          type: string
+        dataset_id:
+          type: string
+        historical_baseline_run_id:
+          type: string
+        estimated_minutes_min:
+          type: integer
+        estimated_minutes_max:
+          type: integer
+        max_parallel:
+          type: integer
+
+    BacktestComparison:
+      type: object
+      description: Worker-generated baseline/current evidence. Fields vary when a baseline artifact is unavailable.
+      additionalProperties: true
+
+    BacktestJobStatus:
+      type: object
+      required: [job_id, status]
+      properties:
+        job_id:
+          type: string
+        status:
+          type: string
+          enum: [queued, running, completed, failed, interrupted]
+        preset:
+          type: string
+          nullable: true
+        variant:
+          type: string
+          nullable: true
+        dataset_id:
+          type: string
+          nullable: true
+        historical_baseline_run_id:
+          type: string
+          nullable: true
         run_id:
           type: string
           nullable: true
-          description: Populated once the run completes; use to call GET /api/backtests/{run_id}
+          description: Populated before the runner starts; use it with GET /api/backtests/live/{run_id}.
         progress_pct:
           type: number
           nullable: true
-          description: 0–100 while running
+          description: 0–100 while a run record has snapshots
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        exit_code:
+          type: integer
+          nullable: true
         error:
           type: string
           nullable: true
@@ -1596,10 +2056,17 @@ components:
           nullable: true
           description: |
             `return_pct / benchmark_pct`. The roadmap's G6 gate is 0.50 in bull;
-            above 1.0 is positive alpha. Null when there was no benchmark coverage.
-            When `benchmark_pct` is near zero this is a small number over a small
-            number — the report's own notes say so; surface the percentage-point
-            difference instead.
+            above 1.0 is positive alpha. Null when there was no benchmark coverage
+            **and null whenever `benchmark_pct` is below +1%**: a ratio to a flat
+            or falling hold is meaningless (two negatives read as a win), so lead
+            with `alpha_pp` and show the ratio only when present.
+        alpha_pp:
+          type: number
+          nullable: true
+          description: |
+            `return_pct − benchmark_pct`, in percentage points. The headline: always
+            defined when a benchmark is, whatever its sign. Null only when the
+            benchmark could not be fetched.
         checks_failed:
           type: integer
           description: Count of failing invariants (position cap, realized_pnl written, etc).
@@ -1647,7 +2114,13 @@ components:
         capture_ratio:
           type: number
           nullable: true
-          description: Null when there was no benchmark coverage. Never render null as 0.
+          description: |
+            Null when there was no benchmark coverage, and null whenever the hold
+            is below +1% — lead with `alpha_pp`. Never render null as 0.
+        alpha_pp:
+          type: number
+          nullable: true
+          description: return_pct − benchmark_pct in percentage points; see EvaluationSummary.
         checks_failed:
           type: integer
         error:
@@ -1665,3 +2138,308 @@ components:
             The structured report: segment, discontinuities, per-symbol
             participation, exit-path forward returns, and the invariant checks.
       required: [id, session_id, mode, trigger, generated_at, window_start, window_end, checks_failed, digest]
+
+    # ── Oracle (read-only lineage for agents; see /api/oracle/*) ──────────
+    OracleSessionSummary:
+      type: object
+      description: |
+        One engine session as the oracle sees it — the discovery entry point.
+        open_lots / closed_lots come from the session's own position table (paper
+        or real_*), so the counts are comparable within a mode, not across modes.
+      properties:
+        session_id:
+          type: string
+        mode:
+          type: string
+        trading_enabled:
+          type: boolean
+        max_open_positions:
+          type: integer
+        last_snapshot_ts:
+          type: string
+          nullable: true
+        open_lots:
+          type: integer
+        closed_lots:
+          type: integer
+      required: [session_id, mode, trading_enabled, max_open_positions]
+    OracleLot:
+      type: object
+      description: |
+        One lot of the ledger — the DB row a lineage query chains from. Prices are
+        NOT rounded to a fixed decimal count (the DB holds Numeric(20, 8); fixed
+        decimals destroy sub-cent assets).
+      properties:
+        id:
+          type: integer
+        symbol:
+          type: string
+        side:
+          type: string
+        quantity:
+          type: number
+        entry_price:
+          type: number
+        entry_timestamp:
+          type: string
+        current_price:
+          type: number
+          nullable: true
+        status:
+          type: string
+        unrealized_pnl:
+          type: number
+        realized_pnl:
+          type: number
+        transaction_costs:
+          type: number
+        stop_loss_price:
+          type: number
+          nullable: true
+          description: Hard stop, or null when the lot carries none (the regime layer removed it at entry, or the lot came from a trailing re-entry).
+        trailing_stop_active:
+          type: boolean
+        trailing_stop_price:
+          type: number
+          nullable: true
+        highest_price:
+          type: number
+          nullable: true
+        lowest_price:
+          type: number
+          nullable: true
+        confidence_score:
+          type: number
+        exit_price:
+          type: number
+          nullable: true
+        exit_timestamp:
+          type: string
+          nullable: true
+        exit_reason:
+          type: string
+          description: |
+            Why the lot closed: trailing_stop, hard_stop_loss, ai_signal_market, rotation, external_sale (sold outside the engine, booked at the venue's own fill), external_sale_unpriced (sold outside the engine, no usable fill — closed at the last mark). Empty while open.
+        entry_regime_label:
+          type: string
+          nullable: true
+        entry_regime_confidence:
+          type: number
+          nullable: true
+        exit_regime_label:
+          type: string
+          nullable: true
+        exit_regime_confidence:
+          type: number
+          nullable: true
+        basis_source:
+          type: string
+          description: |
+            Where the lot's cost basis came from. `traded`: this engine bought it and the entry is the real fill. `adopted`: found on the exchange and booked at the mark — its P&L is measured FROM ADOPTION, not lifetime. `reconstructed`: adopted, basis rebuilt from the venue's trade history.
+        adopted_at:
+          type: string
+          nullable: true
+        venue_market:
+          type: string
+          nullable: true
+      required: [id, symbol, side, quantity, entry_price, entry_timestamp, status, unrealized_pnl, realized_pnl, transaction_costs]
+    OracleFill:
+      type: object
+      description: |
+        One fill chained to a lot — the trade that actually moved money.
+      properties:
+        id:
+          type: integer
+        symbol:
+          type: string
+        side:
+          type: string
+        quantity:
+          type: number
+        price:
+          type: number
+        timestamp:
+          type: string
+        commission:
+          type: number
+        pnl:
+          type: number
+        pnl_pct:
+          type: number
+        reason:
+          type: string
+          nullable: true
+          description: |
+            The close reason for a SELL that closed a lot; `exchange_history` for ingested history rows.
+        source:
+          type: string
+          description: |
+            `engine` — an order this engine placed. `exchange` — the venue recorded it: history ingested at startup, or the close of a lot sold outside the engine.
+        settle_currency:
+          type: string
+          nullable: true
+        venue_market:
+          type: string
+          nullable: true
+      required: [id, symbol, side, quantity, price, timestamp, commission, pnl, pnl_pct]
+    LotLineage:
+      type: object
+      description: |
+        The full chain for one lot: the position, its fills, and which decision-trace
+        files were being written while it was open (the DB holds WHAT happened, the
+        traces hold WHY).
+      properties:
+        session_id:
+          type: string
+        mode:
+          type: string
+        lot:
+          $ref: #/components/schemas/OracleLot
+        fills:
+          type: array
+          items:
+            $ref: #/components/schemas/OracleFill
+        trace_files:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+          description: Decision-trace files whose modification time falls inside [lineage_from, lineage_until]; each entry is {name, size_bytes, modified_at, covers_until}.
+        lineage_from:
+          type: string
+        lineage_until:
+          type: string
+      required: [session_id, mode, lot, fills, lineage_from, lineage_until]
+    OracleLotsResponse:
+      type: object
+      description: |
+        A bounded page of the lot ledger.
+      properties:
+        session_id:
+          type: string
+        mode:
+          type: string
+        total_matching:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+        lots:
+          type: array
+          items:
+            $ref: #/components/schemas/OracleLot
+      required: [session_id, mode, total_matching, limit, offset, lots]
+    TraceFileInfo:
+      type: object
+      description: |
+        One decision-trace file on disk for this session.
+      properties:
+        name:
+          type: string
+        size_bytes:
+          type: integer
+        modified_at:
+          type: string
+      required: [name, size_bytes, modified_at]
+    TraceRecordsResponse:
+      type: object
+      description: |
+        Server-side-slimmed trace records, filtered and capped. Prompt text is dropped
+        unless keep_prompts was set, and even then capped per prompt.
+      properties:
+        session_id:
+          type: string
+        files_scanned:
+          type: integer
+        records_scanned:
+          type: integer
+        records:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+          description: |
+            Slimmed trace records: {timestamp, workflow_id, agent_id, type, content, result, metadata} with bulk fields dropped.
+        truncated:
+          type: boolean
+        keep_prompts:
+          type: boolean
+      required: [session_id, files_scanned, records_scanned, records, truncated, keep_prompts]
+    LlmCallsResponse:
+      type: object
+      description: |
+        Recent entries of the SHARED LLM call log. The log carries symbol and agent but
+        no session, so this answer is never session-scoped.
+      properties:
+        entries:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+          description: Raw llm_calls.jsonl rows, newest last.
+        scanned_bytes:
+          type: integer
+      required: [entries, scanned_bytes]
+    ContinuityGap:
+      type: object
+      description: |
+        A stretch with no snapshots — the signature of an engine outage.
+      properties:
+        from_ts:
+          type: string
+        until_ts:
+          type: string
+        minutes:
+          type: number
+      required: [from_ts, until_ts, minutes]
+    ContinuityReport:
+      type: object
+      description: |
+        Snapshot continuity for a session: coverage, gaps, and rows whose total_value
+        excluded unpriceable holdings (across those the equity curve is a floor, not a
+        valuation).
+      properties:
+        session_id:
+          type: string
+        mode:
+          type: string
+        snapshot_count:
+          type: integer
+        first_snapshot:
+          type: string
+          nullable: true
+        last_snapshot_ts:
+          type: string
+          nullable: true
+        max_gap_minutes:
+          type: number
+        unpriced_rows:
+          type: integer
+          description: Snapshots whose total_value excluded unpriceable holdings — a drawdown read across them measures a ticker outage, not the book.
+        gaps:
+          type: array
+          items:
+            $ref: #/components/schemas/ContinuityGap
+      required: [session_id, mode, snapshot_count, gaps]
+    LogTailResponse:
+      type: object
+      description: |
+        The last lines of the session's newest engine log — bounded by bytes read from
+        the end of one file, never a whole file.
+      properties:
+        session_id:
+          type: string
+        file:
+          type: string
+        size_bytes:
+          type: integer
+        bytes_read:
+          type: integer
+        truncated:
+          type: boolean
+        lines:
+          type: array
+          items:
+            type: string
+      required: [session_id, file, size_bytes, bytes_read, truncated, lines]

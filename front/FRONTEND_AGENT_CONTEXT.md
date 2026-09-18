@@ -52,17 +52,18 @@ Set up the TanStack Router with these five routes. They map directly to the endp
 
 ### A. Control Tower / Launch (`/`)
 
-**Purpose**: Launch new backtests and inspect system health.
+**Purpose**: Approve one named F2 condition and launch it through Tower's durable queue.
 
 **Data sources**:
-- `GET /api/system/status` — Rust version, LLM latency, DB size (poll every 30 s)
-- `POST /api/backtests` — submit a new run; on 202 redirect to `/backtests/jobs/:jobId`
+- `GET /api/system/status` — system health.
+- `GET /api/backtests/presets` — reviewed conditions, resolved `parameters`, descriptions, historical baseline, runtime estimate, and host concurrency limit.
+- `POST /api/backtests` — submit only `{preset, variant}` after explicit confirmation. Requires a control operator and returns 202 with `job_id`.
 
 **Components**:
-- `SystemStatusBar` — top-of-page strip showing Rust core ✅, LLM latency, DB size
-- `LaunchForm` — controlled form mapping 1-to-1 to `BacktestConfig` schema; boolean flags render as toggle chips, not raw checkboxes; defaults match the validated P1 stack (`fixed_universe`, `dual_portfolio`, `regime_continuous`, `position_rotation`, `disable_ai_exits` all on; `mock_critic` off)
-- Preset selector: **Bull / Bear / Sideways** — clicking one sets `start_date`/`end_date` and any preset-specific flag overrides
-- Submit fires `POST /api/backtests`, then routes to the live monitor for the returned `job_id`
+- `SystemStatusBar` — system health.
+- `LaunchForm` — select a server-provided F2 condition, show its resolved parameters and time estimate, then ask for approval of exactly one test. The confirmation button submits the request. Raw config fields, CLI arguments, filesystem paths, images and provider settings are not accepted by this endpoint.
+- On 202 navigate to `/backtests/jobs/:jobId`. Poll `GET /api/backtests/jobs/:jobId`; do not use job ID as run ID and do not auto-detect another active run for a queued request.
+- Show backend error details, including a 409 if the uploaded dataset is not mounted or registered. Do not silently fall back to a local run.
 
 ---
 
@@ -108,13 +109,15 @@ Set up the TanStack Router with these five routes. They map directly to the endp
 
 **Purpose**: Watch a backtest unfold in real time — open positions, rolling equity curve, recent fills.
 
-**Routing**: navigate to `/backtests/live` when a run is launched; the page auto-resolves the
-`run_id` via the first poll and then redirects to `/backtests/live/:runId` to make the URL bookmarkable.
+**Routing**: a launch navigates to `/backtests/jobs/:jobId`. Queue status supplies
+`run_id` before execution; use that ID for `/backtests/live/:runId`. The standalone
+`/backtests/live` page remains an auto-detect view for existing runs.
 
 **Data sources** (all implemented and tested):
 - `GET /api/backtests/live` — auto-detects the active run; returns `LiveBacktestDetail`; 404 when nothing is running. Poll this on page mount to get the `run_id`, then switch to the next endpoint.
 - `GET /api/backtests/live/:runId` — poll every 2–3 s; returns `LiveBacktestDetail` with open positions, last 20 fills, full equity curve from SQLite, and `is_active` flag.
-- `GET /api/backtests/jobs/:runId` — lightweight progress endpoint (`progress_pct` 0–100, `status` running/completed); use as a thin status badge without fetching the full detail payload.
+- `GET /api/backtests/jobs/:jobId` — durable state (`queued`, `running`, `completed`, `failed`, `interrupted`), progress and `run_id`. Stop polling on a terminal state; an interrupted job never auto-retries. Legacy run IDs remain readable.
+- `GET /api/backtests/jobs/:jobId/comparison` — worker-recorded baseline/current evidence on terminal results. Show net equity return, costs, drawdown and validity. Display missing baseline artifacts explicitly.
 
 **When to stop polling**: `LiveBacktestDetail.is_active === false` AND `portfolio_metrics !== null` → run is done. Auto-navigate to `/backtests/:runId` for the completed-run view.
 

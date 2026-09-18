@@ -3,6 +3,10 @@ import type {
   BacktestConfig,
   BacktestSummary,
   BacktestJobStatus,
+  BacktestLaunchRequest,
+  BacktestLaunchAccepted,
+  BacktestPresetInfo,
+  BacktestComparison,
   BacktestResult,
   PaginatedResponse,
   Trade,
@@ -15,6 +19,15 @@ import type {
   RealAccountStatus,
   EvaluationReportResponse,
   EvaluationSummary,
+  OracleSessionSummary,
+  OracleLotsResponse,
+  LotLineage,
+  TraceFileInfo,
+  OracleTraceRecordType,
+  TraceRecordsResponse,
+  LlmCallsResponse,
+  ContinuityReport,
+  LogTailResponse,
 } from '../types/api';
 
 const API_BASE = '/api';
@@ -22,7 +35,19 @@ const API_BASE = '/api';
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${url}`, options);
   if (!response.ok) {
-    throw new Error(`API Error: ${response.status} ${response.statusText}`);
+    // Surface the backend's error detail (e.g. FastAPI's `detail`) — the
+    // launch flow depends on it to show a 409 dataset error verbatim.
+    let detail = '';
+    try {
+      const body: unknown = await response.json();
+      if (body && typeof body === 'object' && 'detail' in body) {
+        const d = (body as { detail: unknown }).detail;
+        detail = typeof d === 'string' ? d : JSON.stringify(d);
+      }
+    } catch {
+      // No JSON body — the status line alone carries the error.
+    }
+    throw new Error(`API Error: ${response.status} ${response.statusText}${detail ? ` — ${detail}` : ''}`);
   }
   return response.json();
 }
@@ -36,15 +61,24 @@ export const api = {
   getBacktests: (limit = 20, offset = 0) =>
     fetchJson<BacktestSummary[]>(`/backtests?limit=${limit}&offset=${offset}`),
 
-  launchBacktest: (config: BacktestConfig) =>
-    fetchJson<{ job_id: string; status: string }>('/backtests', {
+  // Reviewed F2 conditions the launch form may present for confirmation.
+  getBacktestPresets: () => fetchJson<BacktestPresetInfo[]>('/backtests/presets'),
+
+  // Only {preset, variant} — raw config fields are rejected with 422.
+  launchBacktest: (request: BacktestLaunchRequest) =>
+    fetchJson<BacktestLaunchAccepted>('/backtests', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(config),
+      body: JSON.stringify(request),
     }),
 
   getJobStatus: (jobId: string) =>
     fetchJson<BacktestJobStatus>(`/backtests/jobs/${jobId}`),
+
+  // Worker-recorded baseline/current evidence; 404 when the artifact is
+  // unavailable, 409 while the job has not reached a terminal state.
+  getJobComparison: (jobId: string) =>
+    fetchJson<BacktestComparison>(`/backtests/jobs/${jobId}/comparison`),
 
   getBacktestResult: (runId: string) =>
     fetchJson<BacktestResult>(`/backtests/${runId}`),
@@ -105,11 +139,22 @@ export const api = {
   // Evaluation (Route G)
   // Slow on purpose — walks hourly exchange bars for every symbol the
   // session traded. Budget 20–60s; the caller must render a pending state.
-  runEvaluation: (sessionId: string, windowDays?: number) =>
-    fetchJson<EvaluationReportResponse>(
-      `/evaluation/${sessionId}/run${windowDays != null ? `?window_days=${windowDays}` : ''}`,
+  // `since`/`until` measure one explicit stretch (≤ 120 days) and override
+  // `windowDays`; `until` defaults to now.
+  runEvaluation: (
+    sessionId: string,
+    range?: { windowDays?: number; since?: string; until?: string },
+  ) => {
+    const params = new URLSearchParams();
+    if (range?.windowDays != null) params.set('window_days', String(range.windowDays));
+    if (range?.since) params.set('since', range.since);
+    if (range?.until) params.set('until', range.until);
+    const qs = params.toString();
+    return fetchJson<EvaluationReportResponse>(
+      `/evaluation/${sessionId}/run${qs ? `?${qs}` : ''}`,
       { method: 'POST' },
-    ),
+    );
+  },
 
   getLatestEvaluation: (sessionId: string) =>
     fetchJson<EvaluationReportResponse>(`/evaluation/${sessionId}/latest`),
@@ -120,4 +165,79 @@ export const api = {
   // Direct link only — the endpoint sets Content-Disposition itself.
   evaluationDownloadUrl: (reportId: number) =>
     `${API_BASE}/evaluation/reports/${reportId}/download`,
+
+  // Oracle — read-only lineage for agents and service tokens. No oracle
+  // route writes money state, queues a command, or reaches an exchange.
+  getOracleSessions: () => fetchJson<OracleSessionSummary[]>('/oracle/sessions'),
+
+  getOracleLots: (
+    sessionId: string,
+    opts: { symbol?: string; status?: 'open' | 'closed'; limit?: number; offset?: number } = {},
+  ) => {
+    const params = new URLSearchParams();
+    if (opts.symbol) params.set('symbol', opts.symbol);
+    if (opts.status) params.set('status', opts.status);
+    if (opts.limit != null) params.set('limit', String(opts.limit));
+    if (opts.offset != null) params.set('offset', String(opts.offset));
+    const qs = params.toString();
+    return fetchJson<OracleLotsResponse>(`/oracle/${sessionId}/lots${qs ? `?${qs}` : ''}`);
+  },
+
+  getOracleLotLineage: (sessionId: string, lotId: number) =>
+    fetchJson<LotLineage>(`/oracle/${sessionId}/lots/${lotId}/lineage`),
+
+  getOracleTraces: (sessionId: string) =>
+    fetchJson<TraceFileInfo[]>(`/oracle/${sessionId}/traces`),
+
+  getOracleTraceRecords: (
+    sessionId: string,
+    opts: {
+      symbol?: string;
+      record_type?: OracleTraceRecordType;
+      since?: string;
+      until?: string;
+      limit?: number;
+      keep_prompts?: boolean;
+    } = {},
+  ) => {
+    const params = new URLSearchParams();
+    if (opts.symbol) params.set('symbol', opts.symbol);
+    if (opts.record_type) params.set('record_type', opts.record_type);
+    if (opts.since) params.set('since', opts.since);
+    if (opts.until) params.set('until', opts.until);
+    if (opts.limit != null) params.set('limit', String(opts.limit));
+    if (opts.keep_prompts != null) params.set('keep_prompts', String(opts.keep_prompts));
+    const qs = params.toString();
+    return fetchJson<TraceRecordsResponse>(`/oracle/${sessionId}/traces/records${qs ? `?${qs}` : ''}`);
+  },
+
+  // The call log is shared by every engine process — filtered by
+  // symbol/agent only, never by session.
+  getOracleLlmCalls: (
+    sessionId: string,
+    opts: { symbol?: string; agent?: string; limit?: number } = {},
+  ) => {
+    const params = new URLSearchParams();
+    if (opts.symbol) params.set('symbol', opts.symbol);
+    if (opts.agent) params.set('agent', opts.agent);
+    if (opts.limit != null) params.set('limit', String(opts.limit));
+    const qs = params.toString();
+    return fetchJson<LlmCallsResponse>(`/oracle/${sessionId}/llm-calls${qs ? `?${qs}` : ''}`);
+  },
+
+  getOracleContinuity: (
+    sessionId: string,
+    opts: { gap_minutes?: number; days?: number } = {},
+  ) => {
+    const params = new URLSearchParams();
+    if (opts.gap_minutes != null) params.set('gap_minutes', String(opts.gap_minutes));
+    if (opts.days != null) params.set('days', String(opts.days));
+    const qs = params.toString();
+    return fetchJson<ContinuityReport>(`/oracle/${sessionId}/continuity${qs ? `?${qs}` : ''}`);
+  },
+
+  getOracleLogTail: (sessionId: string, lines?: number) =>
+    fetchJson<LogTailResponse>(
+      `/oracle/${sessionId}/log${lines != null ? `?lines=${lines}` : ''}`,
+    ),
 };

@@ -17,11 +17,18 @@ function formatDateTime(iso: string | null): string {
 // Null is not zero — a null measurement renders as an em-dash plus the reason.
 function nullReason(report: EvaluationReportResponse | null): string {
   if (report?.error) return report.error;
-  return 'no benchmark coverage in this window';
+  return 'no benchmark coverage, or the hold was below +1% — a ratio to a flat hold is meaningless';
 }
 
 function formatNullablePct(value: number | null): string {
   return value != null ? formatPercentage(value) : '—';
+}
+
+// alpha_pp — return_pct − benchmark_pct in percentage points. Always defined
+// when a benchmark is, whatever its sign; the headline when the ratio is null.
+function formatPp(value: number | null | undefined): string {
+  if (value == null) return '—';
+  return `${value >= 0 ? '+' : ''}${value.toFixed(2)} pp`;
 }
 
 function formatCell(value: unknown): string {
@@ -371,13 +378,21 @@ export function EvaluationDashboard() {
             </div>
           )}
 
-          {/* Headline figures — capture ratio leads */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+          {/* Headline figures — capture ratio leads when present; alpha_pp is
+              always defined when a benchmark is and leads when the ratio is
+              null (flat or falling hold below +1%). */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <KPICard
               label="Capture Ratio"
               value={report.capture_ratio != null ? report.capture_ratio.toFixed(2) : '—'}
               isPositive={report.capture_ratio != null ? report.capture_ratio >= 0.5 : false}
               className={report.capture_ratio == null ? 'opacity-80' : ''}
+            />
+            <KPICard
+              label="Alpha vs Hold"
+              value={formatPp(report.alpha_pp)}
+              isPositive={report.alpha_pp != null ? report.alpha_pp >= 0 : false}
+              neutral={report.alpha_pp == null}
             />
             <KPICard
               label="Book Return (window)"
@@ -396,15 +411,17 @@ export function EvaluationDashboard() {
             <p className="text-xs text-[var(--color-text-muted)] -mt-1">
               Capture ratio: <span className="font-mono">—</span> — {nullReason(report)}. Above 1.0 is
               positive alpha; 0.50 is the project's bull gate.
+              {report.alpha_pp != null && (
+                <> Lead with alpha instead: <span className="font-mono">{formatPp(report.alpha_pp)}</span> vs the hold.</>
+              )}
             </p>
           )}
           {report.capture_ratio != null && (
             <p className="text-xs text-[var(--color-text-muted)] -mt-1">
               System return ÷ equal-weight hold of the symbols actually traded · bull gate 0.50 · above
               1.0 is positive alpha.
-              {Math.abs(report.benchmark_pct ?? 1) < 0.5 && report.return_pct != null && report.benchmark_pct != null && (
-                <> Near-zero benchmark makes the ratio a small number over a small number — read the
-                difference instead: {(report.return_pct - report.benchmark_pct).toFixed(2)} pp.</>
+              {report.alpha_pp != null && Math.abs(report.benchmark_pct ?? 1) < 1 && (
+                <> The hold is near flat, so read the ratio beside alpha: <span className="font-mono">{formatPp(report.alpha_pp)}</span>.</>
               )}
             </p>
           )}

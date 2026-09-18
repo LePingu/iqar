@@ -2,55 +2,16 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { api } from '../services/api';
-import type { BacktestConfig } from '../types/api';
+import type { BacktestLaunchRequest, BacktestPresetInfo } from '../types/api';
 import { GlassCard } from '../components/GlassCard';
-import { FlagChip } from '../components/FlagChip';
 
-const DEFAULT_CONFIG: BacktestConfig = {
-  initial_capital: 10000,
-  transaction_fee: 0.0026,
-  slippage_pct: 0.001,
-  max_positions: 15,
-  max_position_pct: 0.2,
-  target_decisions: 130,
-  start_date: '2023-01-01',
-  end_date: '2023-12-31',
-  enable_short_selling: false,
-  enable_compounding: false,
-  enable_trailing_stops: true,
-  disable_ai_exits: true,
-  pattern_analysis_enabled: true,
-  risk_assessment_enabled: true,
-  sentiment_analysis_enabled: false,
-  correlation_analysis_enabled: true,
-  fixed_universe_enabled: true,
-  dual_portfolio_enabled: true,
-  regime_continuous_enabled: true,
-  position_rotation_enabled: true,
-  mock_critic: false,
-  anti_averaging_down_enabled: true,
-  critic_sideways_asset_aware_enabled: false,
-  vol_trail_enabled: false,
-  vol_trail_multiplier: 1.0,
-  vol_trail_floor: 0.02,
-  vol_trail_ceiling: 0.15,
-};
-
-const FLAG_DEFINITIONS = [
-  { key: 'fixed_universe_enabled' as const, label: 'Fixed Universe' },
-  { key: 'dual_portfolio_enabled' as const, label: 'Dual Portfolio' },
-  { key: 'regime_continuous_enabled' as const, label: 'Regime Continuous' },
-  { key: 'position_rotation_enabled' as const, label: 'Position Rotation' },
-  { key: 'disable_ai_exits' as const, label: 'Disable AI Exits' },
-  { key: 'mock_critic' as const, label: 'Mock Critic' },
-  { key: 'anti_averaging_down_enabled' as const, label: 'Anti Avg Down' },
-  { key: 'critic_sideways_asset_aware_enabled' as const, label: 'Critic Sideways Asset-Aware' },
-  { key: 'vol_trail_enabled' as const, label: 'Vol Trail' },
-];
+function presetKey(p: { preset: string; variant: string }): string {
+  return `${p.preset}/${p.variant}`;
+}
 
 export function ControlTower() {
   const navigate = useNavigate();
-  const [config, setConfig] = useState<BacktestConfig>(DEFAULT_CONFIG);
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
 
   const { data: status, isLoading: statusLoading } = useQuery({
     queryKey: ['systemStatus'],
@@ -58,34 +19,29 @@ export function ControlTower() {
     refetchInterval: 30000,
   });
 
+  const presetsQuery = useQuery({
+    queryKey: ['backtestPresets'],
+    queryFn: api.getBacktestPresets,
+  });
+
   const launchMutation = useMutation({
-    mutationFn: (newConfig: BacktestConfig) => api.launchBacktest(newConfig),
-    onSuccess: () => {
-      navigate({ to: '/backtests/live' });
+    mutationFn: (request: BacktestLaunchRequest) => api.launchBacktest(request),
+    onSuccess: (accepted) => {
+      // Queue status supplies run_id before execution — the job page owns
+      // the handoff to /backtests/live/:runId. Never auto-detect another
+      // active run for a queued request.
+      navigate({ to: '/backtests/jobs/$jobId', params: { jobId: accepted.job_id } });
     },
   });
 
-  const handleLaunch = (e: React.FormEvent) => {
+  const presets = presetsQuery.data ?? [];
+  const selected: BacktestPresetInfo | null =
+    presets.find((p) => presetKey(p) === selectedKey) ?? null;
+
+  const handleConfirm = (e: React.FormEvent) => {
     e.preventDefault();
-    launchMutation.mutate(config);
-  };
-
-  const handlePreset = (type: 'bull' | 'bear' | 'sideways') => {
-    switch (type) {
-      case 'bull':
-        setConfig({ ...config, start_date: '2023-01-01', end_date: '2024-01-01' });
-        break;
-      case 'bear':
-        setConfig({ ...config, start_date: '2022-01-01', end_date: '2023-01-01' });
-        break;
-      case 'sideways':
-        setConfig({ ...config, start_date: '2023-06-01', end_date: '2023-10-01' });
-        break;
-    }
-  };
-
-  const toggleFlag = (key: keyof BacktestConfig) => {
-    setConfig({ ...config, [key]: !config[key] });
+    if (!selected) return;
+    launchMutation.mutate({ preset: selected.preset, variant: selected.variant });
   };
 
   return (
@@ -125,72 +81,107 @@ export function ControlTower() {
       </GlassCard>
 
       <GlassCard>
-        <h2 className="page-title mb-5">Launch Backtest</h2>
-        <div className="flex gap-2 mb-5">
-          <button type="button" onClick={() => handlePreset('bull')} className="btn btn-success text-xs">Bull Preset</button>
-          <button type="button" onClick={() => handlePreset('bear')} className="btn btn-danger text-xs">Bear Preset</button>
-          <button type="button" onClick={() => handlePreset('sideways')} className="btn btn-ghost text-xs">Sideways Preset</button>
-        </div>
+        <h2 className="page-title mb-2">Launch Backtest</h2>
+        <p className="text-sm text-[var(--color-text-secondary)] mb-5">
+          Approve one reviewed F2 condition and queue it through Tower's durable
+          queue. Raw config fields, CLI arguments, paths and provider settings
+          are not accepted here.
+        </p>
 
-        <form onSubmit={handleLaunch} className="flex flex-col gap-4">
-          <label className="flex flex-col gap-1.5 text-sm text-[var(--color-text-secondary)]">
-            Initial Capital (USD)
-            <input
-              type="number"
-              value={config.initial_capital}
-              onChange={e => setConfig({ ...config, initial_capital: Number(e.target.value) })}
-              className="input"
-            />
-          </label>
-          <div className="grid grid-cols-2 gap-3">
-            <label className="flex flex-col gap-1.5 text-sm text-[var(--color-text-secondary)]">
-              Start Date
-              <input type="date" value={config.start_date} onChange={e => setConfig({ ...config, start_date: e.target.value })} className="input" />
-            </label>
-            <label className="flex flex-col gap-1.5 text-sm text-[var(--color-text-secondary)]">
-              End Date
-              <input type="date" value={config.end_date} onChange={e => setConfig({ ...config, end_date: e.target.value })} className="input" />
-            </label>
+        {presetsQuery.isLoading && (
+          <p className="text-[var(--color-text-muted)] animate-pulse text-sm">Loading conditions…</p>
+        )}
+
+        {presetsQuery.error && (
+          <div className="rounded-lg border border-red-500/30 bg-[var(--color-red-muted)] px-4 py-3 text-negative text-sm">
+            <span className="font-bold">Failed to load conditions:</span>{' '}
+            {presetsQuery.error instanceof Error ? presetsQuery.error.message : String(presetsQuery.error)}
           </div>
+        )}
 
+        {!presetsQuery.isLoading && !presetsQuery.error && presets.length === 0 && (
+          <p className="text-sm text-[var(--color-text-muted)]">
+            No reviewed conditions are available from the server right now.
+          </p>
+        )}
+
+        <form onSubmit={handleConfirm} className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
-            <span className="section-title">Configuration Flags</span>
-            <div className="flex flex-wrap gap-2">
-              {FLAG_DEFINITIONS.map(flag => (
-                <FlagChip
-                  key={flag.key}
-                  label={flag.label}
-                  active={!!config[flag.key]}
-                  onClick={() => toggleFlag(flag.key)}
-                />
-              ))}
-            </div>
+            {presets.map((p) => {
+              const key = presetKey(p);
+              const isSelected = key === selectedKey;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setSelectedKey(isSelected ? null : key)}
+                  className={`text-left rounded-lg border px-4 py-3 transition-colors ${
+                    isSelected
+                      ? 'border-[var(--color-gold-accent)] bg-[var(--color-gold-muted)]'
+                      : 'border-[var(--color-border)] bg-[var(--color-bg-hover)] hover:border-[var(--color-gold-accent)]/50'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono text-sm font-bold text-[var(--color-text-primary)]">{key}</span>
+                    <span className="text-xs font-mono text-[var(--color-text-muted)]">
+                      ~{p.estimated_minutes_min}–{p.estimated_minutes_max} min
+                    </span>
+                  </div>
+                  <p className="text-xs text-[var(--color-text-secondary)] mt-1">{p.description}</p>
+                </button>
+              );
+            })}
           </div>
 
-          {/* Vol Trail Parameters */}
-          {config.vol_trail_enabled && (
-            <div className="grid grid-cols-3 gap-3 p-3 bg-[var(--color-bg-hover)] rounded-lg border border-[var(--color-border)]">
-              <label className="flex flex-col gap-1 text-xs text-[var(--color-text-muted)]">
-                Multiplier
-                <input type="number" step="0.1" value={config.vol_trail_multiplier} onChange={e => setConfig({ ...config, vol_trail_multiplier: Number(e.target.value) })} className="input text-xs" />
-              </label>
-              <label className="flex flex-col gap-1 text-xs text-[var(--color-text-muted)]">
-                Floor (min %)
-                <input type="number" step="0.01" value={config.vol_trail_floor} onChange={e => setConfig({ ...config, vol_trail_floor: Number(e.target.value) })} className="input text-xs" />
-              </label>
-              <label className="flex flex-col gap-1 text-xs text-[var(--color-text-muted)]">
-                Ceiling (max %)
-                <input type="number" step="0.01" value={config.vol_trail_ceiling} onChange={e => setConfig({ ...config, vol_trail_ceiling: Number(e.target.value) })} className="input text-xs" />
-              </label>
+          {selected && (
+            <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-hover)] p-4 flex flex-col gap-3">
+              <div>
+                <span className="section-title">Resolved Parameters</span>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {Object.entries(selected.parameters).map(([key, value]) => (
+                    <span key={key} className="badge bg-white/5 text-[var(--color-text-secondary)] font-mono">
+                      {key}={value}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div className="flex flex-col gap-1 text-xs text-[var(--color-text-muted)]">
+                <span>
+                  Baseline run:{' '}
+                  <span className="font-mono text-[var(--color-text-secondary)]">{selected.historical_baseline_run_id}</span>
+                </span>
+                <span>
+                  Estimated runtime:{' '}
+                  <span className="font-mono text-[var(--color-text-secondary)]">
+                    {selected.estimated_minutes_min}–{selected.estimated_minutes_max} min
+                  </span>
+                </span>
+                <span>
+                  Host concurrency limit:{' '}
+                  <span className="font-mono text-[var(--color-text-secondary)]">{selected.max_parallel}</span>
+                  {' '}— one queued request claims a single worker slot.
+                </span>
+              </div>
+            </div>
+          )}
+
+          {launchMutation.isError && (
+            <div className="rounded-lg border border-red-500/30 bg-[var(--color-red-muted)] px-4 py-3 text-negative text-sm">
+              <span className="font-bold">Launch rejected:</span>{' '}
+              {launchMutation.error instanceof Error ? launchMutation.error.message : String(launchMutation.error)}
             </div>
           )}
 
           <button
             type="submit"
-            disabled={launchMutation.isPending}
+            disabled={!selected || launchMutation.isPending}
             className="btn btn-primary mt-2"
           >
-            {launchMutation.isPending ? 'Launching…' : 'Execute Backtest'}
+            {launchMutation.isPending
+              ? 'Queueing…'
+              : selected
+                ? `Approve & launch ${presetKey(selected)}`
+                : 'Select a condition to launch'}
           </button>
         </form>
       </GlassCard>

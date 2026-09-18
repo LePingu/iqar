@@ -102,12 +102,68 @@ export interface AIDecision {
   pm_take_profit: number;
 }
 
+/**
+ * Durable queue state for one backtest job. Tower creates the record before
+ * the worker starts; a queued job has no `run_id` yet. An `interrupted` job
+ * (worker restart) is never automatically retried.
+ */
 export interface BacktestJobStatus {
   job_id: string;
-  status: 'queued' | 'running' | 'completed' | 'failed';
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'interrupted';
+  preset?: string | null;
+  variant?: string | null;
+  dataset_id?: string | null;
+  historical_baseline_run_id?: string | null;
+  /**
+   * Populated before the runner starts; use it with
+   * GET /api/backtests/live/{run_id}. Never assume job_id == run_id.
+   */
   run_id?: string | null;
   progress_pct?: number | null;
+  created_at?: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+  exit_code?: number | null;
   error?: string | null;
+}
+
+/** The only fields POST /api/backtests accepts — a named, reviewed condition. */
+export interface BacktestLaunchRequest {
+  preset: string;
+  variant: string;
+}
+
+/** One F2 condition the UI may present for explicit operator confirmation. */
+export interface BacktestPresetInfo {
+  preset: string;
+  variant: string;
+  description: string;
+  parameters: Record<string, string>;
+  historical_baseline_run_id: string;
+  estimated_minutes_min: number;
+  estimated_minutes_max: number;
+  /** Current host limit; the UI must not imply additional parallel capacity. */
+  max_parallel: number;
+}
+
+export interface BacktestLaunchAccepted {
+  job_id: string;
+  status: 'queued';
+  preset: string;
+  variant: string;
+  dataset_id: string;
+  historical_baseline_run_id: string;
+  estimated_minutes_min: number;
+  estimated_minutes_max: number;
+  max_parallel: number;
+}
+
+/**
+ * Worker-generated baseline/current evidence. Free-form by contract: fields
+ * vary when a baseline artifact is unavailable, so render nulls explicitly.
+ */
+export interface BacktestComparison {
+  [key: string]: unknown;
 }
 
 export interface AssetSummary {
@@ -312,7 +368,18 @@ export interface EvaluationSummary {
   window_end: string;
   return_pct: number | null;
   benchmark_pct: number | null;
+  /**
+   * `return_pct / benchmark_pct`. Null when there was no benchmark coverage
+   * AND null whenever `benchmark_pct` is below +1% — a ratio to a flat or
+   * falling hold is meaningless. Lead with `alpha_pp`; never render null as 0.
+   */
   capture_ratio: number | null;
+  /**
+   * `return_pct − benchmark_pct` in percentage points. Always defined when a
+   * benchmark is, whatever its sign; null only when the benchmark could not
+   * be fetched.
+   */
+  alpha_pp?: number | null;
   checks_failed: number;
   error?: string | null;
 }
@@ -334,4 +401,153 @@ export interface EvaluationPayload {
 export interface EvaluationReportResponse extends EvaluationSummary {
   digest: string;
   payload: EvaluationPayload;
+}
+
+// --- Oracle (read-only lineage for agents and service tokens) ---
+// Every oracle read is audited; these routes write nothing and are the only
+// routes a Cloudflare Access service token may call.
+
+export interface OracleSessionSummary {
+  session_id: string;
+  mode: string;
+  trading_enabled: boolean;
+  max_open_positions: number;
+  last_snapshot_ts?: string | null;
+  open_lots?: number;
+  closed_lots?: number;
+}
+
+/**
+ * One lot of the ledger. Prices are NOT rounded to a fixed decimal count —
+ * format with fmtPrice (significant digits), never toFixed(2).
+ */
+export interface OracleLot {
+  id: number;
+  symbol: string;
+  side: string;
+  quantity: number;
+  entry_price: number;
+  entry_timestamp: string;
+  current_price?: number | null;
+  status: string;
+  unrealized_pnl: number;
+  realized_pnl: number;
+  transaction_costs: number;
+  /** Hard stop, or null when the lot carries none. */
+  stop_loss_price?: number | null;
+  trailing_stop_active?: boolean;
+  trailing_stop_price?: number | null;
+  highest_price?: number | null;
+  lowest_price?: number | null;
+  confidence_score?: number;
+  exit_price?: number | null;
+  exit_timestamp?: string | null;
+  /** Why the lot closed; empty while open. */
+  exit_reason?: string;
+  entry_regime_label?: string | null;
+  entry_regime_confidence?: number | null;
+  exit_regime_label?: string | null;
+  exit_regime_confidence?: number | null;
+  /**
+   * `traded`: real fill, lifetime P&L. `reconstructed`: basis rebuilt from
+   * venue history, still lifetime P&L. `adopted`: booked at the mark —
+   * P&L is measured FROM ADOPTION, not lifetime.
+   */
+  basis_source?: BasisSource;
+  adopted_at?: string | null;
+  venue_market?: string | null;
+}
+
+/** One fill chained to a lot — the trade that actually moved money. */
+export interface OracleFill {
+  id: number;
+  symbol: string;
+  side: string;
+  quantity: number;
+  price: number;
+  timestamp: string;
+  commission: number;
+  pnl: number;
+  pnl_pct: number;
+  /** Close reason for a SELL; `exchange_history` for ingested rows. */
+  reason?: string | null;
+  /** `engine` placed the order; `exchange` was read back from the venue. */
+  source?: 'engine' | 'exchange';
+  settle_currency?: string | null;
+  venue_market?: string | null;
+}
+
+/** The full chain for one lot: the position, its fills, its trace files. */
+export interface LotLineage {
+  session_id: string;
+  mode: string;
+  lot: OracleLot;
+  fills: OracleFill[];
+  /** Entries of {name, size_bytes, modified_at, covers_until}. */
+  trace_files?: Record<string, unknown>[];
+  lineage_from: string;
+  lineage_until: string;
+}
+
+export interface OracleLotsResponse {
+  session_id: string;
+  mode: string;
+  total_matching: number;
+  limit: number;
+  offset: number;
+  lots: OracleLot[];
+}
+
+export interface TraceFileInfo {
+  name: string;
+  size_bytes: number;
+  modified_at: string;
+}
+
+export type OracleTraceRecordType = 'LLM_PROMPT' | 'ALGO_INPUT' | 'DECISION' | 'ERROR';
+
+export interface TraceRecordsResponse {
+  session_id: string;
+  files_scanned: number;
+  records_scanned: number;
+  /** Slimmed records: {timestamp, workflow_id, agent_id, type, content, result, metadata}. */
+  records: Record<string, unknown>[];
+  truncated: boolean;
+  keep_prompts: boolean;
+}
+
+/** The shared LLM call log — filtered by symbol/agent, never by session. */
+export interface LlmCallsResponse {
+  entries: Record<string, unknown>[];
+  scanned_bytes: number;
+}
+
+export interface ContinuityGap {
+  from_ts: string;
+  until_ts: string;
+  minutes: number;
+}
+
+export interface ContinuityReport {
+  session_id: string;
+  mode: string;
+  snapshot_count: number;
+  first_snapshot?: string | null;
+  last_snapshot_ts?: string | null;
+  max_gap_minutes?: number;
+  /**
+   * Snapshots whose total_value excluded unpriceable holdings — a drawdown
+   * read across them measures a ticker outage, not the book.
+   */
+  unpriced_rows?: number;
+  gaps: ContinuityGap[];
+}
+
+export interface LogTailResponse {
+  session_id: string;
+  file: string;
+  size_bytes: number;
+  bytes_read: number;
+  truncated: boolean;
+  lines: string[];
 }
