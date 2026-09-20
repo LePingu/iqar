@@ -2,7 +2,8 @@
 
 > **Returning agent?** §7 (hand-off log) lists what changed in the backend contract since
 > the last hand-off, newest first, with the section each change lives in. Read it before
-> anything else; `openapi.yaml` beside this file is the exact schema.
+> anything else; `openapi.yaml` beside this file is the schema. Elements marked
+> `x-implementation-status: requested` are frontend requests, not deployed capabilities.
 
 ## 1. System Overview (The Backend Context)
 You are an AI agent tasked with building the "Control Tower" frontend for **Trader-Strat**, an advanced cryptocurrency backtesting and live-trading research system. 
@@ -688,8 +689,28 @@ Present the layout and routing skeleton to the user before building charting int
 ## 7. Hand-off log (what changed in the contract, newest first)
 
 Each entry: date · what a frontend agent must do · where it is specified. `openapi.yaml`
-beside this file is the exact schema for every item; `GET /openapi.json` on a running tower
-is the same contract as served.
+beside this file contains the schemas. Entries marked `x-implementation-status:
+requested` are pending backend work; `GET /openapi.json` on a running tower reports
+what that deployment actually serves.
+
+### 2026-09-21 — approved live monitor redesign and backend requests
+
+- **Read [BACKEND_UI_HANDOFF.md](BACKEND_UI_HANDOFF.md)** for the requested data
+  additions, semantics, polling, rollout behavior and backend acceptance checks.
+- Approved reference: [live-trading-approved.png](mockups/live-trading-approved.png).
+  Screenshot values are illustrative; the frontend does not ship fixture data.
+- This replaces Route E/F's stacked charts and decision modal: one percentage
+  chart, custom benchmark toggles, tabs for positions/decisions/fills/events,
+  compact telemetry and a persistent right-hand details explorer. Halt stays in
+  the header; engine settings and real account reconciliation use disclosures.
+- **Requested, not yet confirmed deployed**: `/api/engine/{session_id}/telemetry`,
+  `/events`, `/orders/{order_id}`. New OpenAPI elements carry
+  `x-implementation-status: requested`. Existing backend-exported entries retain
+  their semantics. Keep these annotations until the backend implements them.
+- Additive nullable fields cover freshness, exposure, return methodology,
+  fill execution quality/order linkage and position protection. Null is unknown.
+  404/501/204 on new reads render unavailable; auth/service errors remain visible.
+- Event streams and replay comparison remain future work, not UI dependencies.
 
 ### 2026-09-19 — decision identity, decision explorer, curve overlays
 

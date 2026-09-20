@@ -260,6 +260,8 @@ export type EngineMode = 'paper' | 'real';
 export type BasisSource = 'traded' | 'adopted' | 'reconstructed';
 
 export interface OpenPosition {
+  position_id?: number | null;
+  protection?: PositionProtection | null;
   basis_source?: BasisSource;
   adopted_at?: string | null;
   venue_market?: string | null;
@@ -274,6 +276,8 @@ export interface OpenPosition {
 }
 
 export interface LiveFill {
+  order_id?: string | null;
+  execution_quality?: ExecutionQuality | null;
   source?: 'engine' | 'exchange';
   settle_currency?: string | null;
   settle_fx_rate?: number | null;
@@ -337,7 +341,8 @@ export interface EngineControls {
   max_open_positions?: number | null;
 }
 
-export interface LiveEngineDetail {
+export interface LiveEngineDetail extends DataFreshness {
+  exposure_pct?: number | null;
   mode?: EngineMode;
   currency?: string;
   observed_from?: string | null;
@@ -597,6 +602,8 @@ export interface CurvePoint {
 
 /** One engine fill placed on the curve and linked to its decision. */
 export interface FillMarker {
+  order_id?: string | null;
+  fill_id?: number | null;
   timestamp: string;
   symbol: string;
   side: string;
@@ -618,7 +625,10 @@ export interface FillMarker {
  * it — a comparison drawn across a rebuild is meaningless). Empty series with a
  * `notes` entry mean "could not measure", never flat.
  */
-export interface EvaluationCurves {
+export interface EvaluationCurves extends DataFreshness {
+  return_method?: string | null;
+  net_of_fees?: boolean | null;
+  cash_flow_adjusted?: boolean | null;
   session_id: string;
   mode: string;
   window_start: string;
@@ -763,4 +773,119 @@ export type DecisionSource =
  */
 export type DecisionSelection =
   | { kind: 'decision'; decisionId: string; summary?: DecisionSummary }
-  | { kind: 'mechanical'; positionId?: number | null; reason?: string | null; symbol?: string };
+  | { kind: 'mechanical'; positionId?: number | null; reason?: string | null; symbol?: string }
+  | { kind: 'fill'; fill: LiveFill; currency: string }
+  | { kind: 'position'; position: OpenPosition }
+  | { kind: 'event'; event: AuditEvent }
+  | { kind: 'order'; orderId: string };
+
+// Live monitor v2 — additive contract requested in front/BACKEND_UI_HANDOFF.md.
+// Missing/null is unknown, including when an older server has no endpoint yet.
+export interface DataFreshness {
+  as_of?: string | null;
+  generated_at?: string | null;
+  snapshot_id?: string | null;
+  stale_after_seconds?: number | null;
+}
+
+export interface ComponentHealth extends DataFreshness {
+  state?: 'healthy' | 'degraded' | 'offline' | 'unknown' | null;
+  label?: string | null;
+  reason?: string | null;
+}
+
+export interface EngineTelemetry extends DataFreshness {
+  session_id?: string | null;
+  mode?: EngineMode | null;
+  components?: {
+    engine?: ComponentHealth | null;
+    market_data?: ComponentHealth | null;
+    exchange?: ComponentHealth | null;
+    critic?: ComponentHealth | null;
+  } | null;
+  last_cycle_at?: string | null;
+  cycle_duration_ms?: number | null;
+  active_event_count?: number | null;
+  incidents?: AuditEvent[] | null;
+  arming?: {
+    live_mode?: string | null;
+    armed?: boolean | null;
+    validate_only?: boolean | null;
+    max_order_usd?: number | null;
+  } | null;
+  reconciliation?: {
+    as_of?: string | null;
+    state?: string | null;
+    matched?: number | null;
+    adopted?: number | null;
+    unpriceable?: number | null;
+    missing_on_exchange?: number | null;
+    reason?: string | null;
+  } | null;
+}
+
+export interface AuditEvent {
+  id: string;
+  occurred_at?: string | null;
+  severity?: 'info' | 'warning' | 'critical' | null;
+  category?: string | null;
+  title?: string | null;
+  detail?: string | null;
+  resolved_at?: string | null;
+  actor?: string | null;
+  decision_id?: string | null;
+  order_id?: string | null;
+  position_id?: number | null;
+  symbol?: string | null;
+  before?: Record<string, unknown> | null;
+  after?: Record<string, unknown> | null;
+  command_state?: string | null;
+}
+
+export interface AuditEventsResponse extends DataFreshness {
+  events?: AuditEvent[] | null;
+  next_cursor?: string | null;
+  active_count?: number | null;
+}
+
+export interface ExecutionQuality {
+  slippage_bps?: number | null;
+  reference?: string | null;
+  reference_price?: number | null;
+  reference_at?: string | null;
+  fees?: number | null;
+  fee_currency?: string | null;
+  fill_time_ms?: number | null;
+  unavailable_reason?: string | null;
+}
+
+export interface OrderExecution {
+  order_id: string;
+  decision_id?: string | null;
+  symbol?: string | null;
+  side?: string | null;
+  status?: string | null;
+  trigger_type?: string | null;
+  requested_quantity?: number | null;
+  filled_quantity?: number | null;
+  average_fill_price?: number | null;
+  currency?: string | null;
+  quality?: ExecutionQuality | null;
+  events?: {
+    id: string;
+    stage?: string | null;
+    occurred_at?: string | null;
+    detail?: string | null;
+  }[] | null;
+}
+
+export interface PositionProtection {
+  allocation_pct?: number | null;
+  effective_stop_price?: number | null;
+  stop_distance_pct?: number | null;
+  free_quantity?: number | null;
+  bonded_quantity?: number | null;
+  mechanism?: string | null;
+  executable?: boolean | null;
+  reason?: string | null;
+}

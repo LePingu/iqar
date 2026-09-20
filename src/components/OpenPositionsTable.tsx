@@ -1,3 +1,5 @@
+import { useDecisions } from './DecisionExplorer';
+import { measured, rows } from '../utils/monitoring';
 import { Fragment } from 'react';
 import type { OpenPosition } from '../types/api';
 import { fmtPrice, formatPercentage } from '../utils/trading';
@@ -32,7 +34,7 @@ function LotCells({ pos }: { pos: OpenPosition }) {
         {formatPercentage(pos.unrealized_pnl_pct)}
       </td>
       <td className="table-cell text-center text-[var(--color-text-muted)]">
-        {pos.trailing_stop_active ? '✓' : '·'}
+        {pos.protection?.executable === false ? <span title={pos.protection.reason ?? 'Protection cannot execute'}>Blocked</span> : pos.trailing_stop_active == null ? '—' : pos.trailing_stop_active ? '✓' : '·'}
       </td>
     </>
   );
@@ -59,6 +61,8 @@ function groupBySymbol(positions: OpenPosition[]): SymbolGroup[] {
 }
 
 export function OpenPositionsTable({ positions }: OpenPositionsTableProps) {
+  const context = useDecisions();
+  positions = rows(positions);
   if (positions.length === 0) {
     return <p className="text-[var(--color-text-muted)] text-sm italic">No open positions</p>;
   }
@@ -88,7 +92,7 @@ export function OpenPositionsTable({ positions }: OpenPositionsTableProps) {
                 <tr key={`${group.symbol}-0`} className="table-row">
                   <td className="table-cell text-[var(--color-text-primary)] font-medium">
                     <div className="flex items-center">
-                      {pos.symbol}
+                      <button className="table-select" onClick={() => context?.select({ kind: 'position', position: pos })}>{pos.symbol}</button>
                       {pos.basis_source === 'adopted' && <AdoptedBadge adoptedAt={pos.adopted_at ?? null} />}
                     </div>
                     {pos.venue_market && (
@@ -108,7 +112,7 @@ export function OpenPositionsTable({ positions }: OpenPositionsTableProps) {
             // Several lots of one symbol: a group header, then the individual
             // FIFO lots underneath — each kept at the price and date it was
             // actually bought at.
-            const totalQty = group.lots.reduce((sum, lot) => sum + lot.quantity, 0);
+            const totalQty = group.lots.every(lot => measured(lot.quantity)) ? group.lots.reduce((sum, lot) => sum + lot.quantity, 0) : null;
             const venueMarket = group.lots.find((lot) => lot.venue_market)?.venue_market;
             return (
               <Fragment key={group.symbol}>
@@ -145,7 +149,7 @@ export function OpenPositionsTable({ positions }: OpenPositionsTableProps) {
                   <tr key={`${group.symbol}-${lotIdx}`} className="table-row">
                     <td className="table-cell">
                       <div className="flex items-center">
-                        <span className="text-xs text-[var(--color-text-muted)] font-mono">lot {lotIdx + 1}</span>
+                        <button className="table-select" onClick={() => context?.select({ kind: 'position', position: pos })}>lot {lotIdx + 1} ↗</button>
                         {pos.basis_source === 'adopted' && <AdoptedBadge adoptedAt={pos.adopted_at ?? null} />}
                       </div>
                     </td>

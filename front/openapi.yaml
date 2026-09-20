@@ -20,6 +20,124 @@ tags:
     description: Read-only lineage for agents and service tokens (lots, fills, traces, logs); every read is audited
 
 paths:
+  /api/engine/{session_id}/telemetry:
+    get:
+      tags:
+        - Engine
+      summary: Read component health and active incidents
+      x-implementation-status: requested
+      description: >-
+        Requested 2026-09-21, not guaranteed deployed. Read-only for Access viewers. See BACKEND_UI_HANDOFF.md.
+        404/501 mean unavailable during rollout; auth/service errors remain errors.
+      parameters:
+        - in: path
+          name: session_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Stored observation; null is unavailable, never zero or healthy.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EngineTelemetry'
+        '204':
+          description: No observation available
+        '401':
+          description: Authentication required
+        '403':
+          description: Access denied
+        '404':
+          description: Resource not available or endpoint not deployed
+        '501':
+          description: Capability not implemented
+        '503':
+          description: Service unavailable; do not infer healthy state
+  /api/engine/{session_id}/events:
+    get:
+      tags:
+        - Engine
+      summary: Read structured audit events with stable cursor
+      x-implementation-status: requested
+      description: >-
+        Requested 2026-09-21, not guaranteed deployed. Read-only for Access viewers. See BACKEND_UI_HANDOFF.md.
+        404/501 mean unavailable during rollout; auth/service errors remain errors.
+      parameters:
+        - in: path
+          name: session_id
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 50
+        - in: query
+          name: cursor
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Stored observation; null is unavailable, never zero or healthy.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditEventsResponse'
+        '204':
+          description: No observation available
+        '401':
+          description: Authentication required
+        '403':
+          description: Access denied
+        '404':
+          description: Resource not available or endpoint not deployed
+        '501':
+          description: Capability not implemented
+        '503':
+          description: Service unavailable; do not infer healthy state
+  /api/engine/{session_id}/orders/{order_id}:
+    get:
+      tags:
+        - Engine
+      summary: Read order execution lifecycle and quality
+      x-implementation-status: requested
+      description: >-
+        Requested 2026-09-21, not guaranteed deployed. Read-only for Access viewers. See BACKEND_UI_HANDOFF.md.
+        404/501 mean unavailable during rollout; auth/service errors remain errors.
+      parameters:
+        - in: path
+          name: session_id
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: order_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Stored observation; null is unavailable, never zero or healthy.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderExecution'
+        '204':
+          description: No observation available
+        '401':
+          description: Authentication required
+        '403':
+          description: Access denied
+        '404':
+          description: Resource not available or endpoint not deployed
+        '501':
+          description: Capability not implemented
+        '503':
+          description: Service unavailable; do not infer healthy state
   /api/system/status:
     get:
       tags:
@@ -1447,6 +1565,29 @@ components:
         trades, portfolio_snapshots) keyed by session_id. No backtest "decisions
         target" concept; the engine runs open-endedly.
       properties:
+        as_of:
+          type: string
+          nullable: true
+          format: date-time
+          x-implementation-status: requested
+        generated_at:
+          type: string
+          nullable: true
+          format: date-time
+          x-implementation-status: requested
+        snapshot_id:
+          type: string
+          nullable: true
+          x-implementation-status: requested
+        stale_after_seconds:
+          type: number
+          nullable: true
+          x-implementation-status: requested
+        exposure_pct:
+          type: number
+          nullable: true
+          description: Percent of portfolio exposed; 12.5 means 12.5%, null is unknown.
+          x-implementation-status: requested
         mode:
           type: string
           enum: [paper, real]
@@ -2049,6 +2190,15 @@ components:
       type: object
       description: An open position as recorded in SQLite at the last decision step
       properties:
+        position_id:
+          type: integer
+          nullable: true
+          x-implementation-status: requested
+        protection:
+          allOf:
+            - $ref: '#/components/schemas/PositionProtection'
+          nullable: true
+          x-implementation-status: requested
         basis_source:
           type: string
           enum: [traded, adopted, reconstructed]
@@ -2175,6 +2325,15 @@ components:
         one significant digit out of five). Apply the significant-digit display
         rule in FRONTEND_AGENT_CONTEXT.md rather than assuming 2dp.
       properties:
+        order_id:
+          type: string
+          nullable: true
+          x-implementation-status: requested
+        execution_quality:
+          allOf:
+            - $ref: '#/components/schemas/ExecutionQuality'
+          nullable: true
+          x-implementation-status: requested
         source:
           type: string
           enum: [engine, exchange]
@@ -2660,6 +2819,14 @@ components:
       type: object
       description: One engine fill placed on the curve and linked to its decision.
       properties:
+        order_id:
+          type: string
+          nullable: true
+          x-implementation-status: requested
+        fill_id:
+          type: integer
+          nullable: true
+          x-implementation-status: requested
         timestamp:
           type: string
         symbol:
@@ -2703,6 +2870,36 @@ components:
         rest in the basket, rebalanced hourly — the fair rung for a 40–70%-invested
         book. Empty series with a `notes` entry mean "could not measure", never flat.
       properties:
+        as_of:
+          type: string
+          nullable: true
+          format: date-time
+          x-implementation-status: requested
+        generated_at:
+          type: string
+          nullable: true
+          format: date-time
+          x-implementation-status: requested
+        snapshot_id:
+          type: string
+          nullable: true
+          x-implementation-status: requested
+        stale_after_seconds:
+          type: number
+          nullable: true
+          x-implementation-status: requested
+        return_method:
+          type: string
+          nullable: true
+          x-implementation-status: requested
+        net_of_fees:
+          type: boolean
+          nullable: true
+          x-implementation-status: requested
+        cash_flow_adjusted:
+          type: boolean
+          nullable: true
+          x-implementation-status: requested
         session_id:
           type: string
         mode:
@@ -3081,3 +3278,356 @@ components:
           items:
             type: string
       required: [session_id, file, size_bytes, bytes_read, truncated, lines]
+
+    ComponentHealth:
+      type: object
+      nullable: true
+      properties:
+        as_of:
+          type: string
+          nullable: true
+          format: date-time
+        generated_at:
+          type: string
+          nullable: true
+          format: date-time
+        snapshot_id:
+          type: string
+          nullable: true
+        stale_after_seconds:
+          type: number
+          nullable: true
+        state:
+          type: string
+          nullable: true
+          enum:
+            - healthy
+            - degraded
+            - offline
+            - unknown
+        label:
+          type: string
+          nullable: true
+        reason:
+          type: string
+          nullable: true
+      x-implementation-status: requested
+    AuditEvent:
+      type: object
+      nullable: true
+      properties:
+        id:
+          type: string
+        occurred_at:
+          type: string
+          nullable: true
+          format: date-time
+        severity:
+          type: string
+          nullable: true
+          enum:
+            - info
+            - warning
+            - critical
+        category:
+          type: string
+          nullable: true
+        title:
+          type: string
+          nullable: true
+        detail:
+          type: string
+          nullable: true
+        resolved_at:
+          type: string
+          nullable: true
+          format: date-time
+        actor:
+          type: string
+          nullable: true
+        decision_id:
+          type: string
+          nullable: true
+        order_id:
+          type: string
+          nullable: true
+        position_id:
+          type: integer
+          nullable: true
+        symbol:
+          type: string
+          nullable: true
+        before:
+          type: object
+          nullable: true
+          additionalProperties: true
+        after:
+          type: object
+          nullable: true
+          additionalProperties: true
+        command_state:
+          type: string
+          nullable: true
+      required:
+        - id
+      x-implementation-status: requested
+    EngineTelemetry:
+      type: object
+      nullable: true
+      properties:
+        as_of:
+          type: string
+          nullable: true
+          format: date-time
+        generated_at:
+          type: string
+          nullable: true
+          format: date-time
+        snapshot_id:
+          type: string
+          nullable: true
+        stale_after_seconds:
+          type: number
+          nullable: true
+        session_id:
+          type: string
+          nullable: true
+        mode:
+          type: string
+          nullable: true
+          enum:
+            - paper
+            - real
+        components:
+          type: object
+          nullable: true
+          properties:
+            engine:
+              allOf:
+                - $ref: '#/components/schemas/ComponentHealth'
+              nullable: true
+            market_data:
+              allOf:
+                - $ref: '#/components/schemas/ComponentHealth'
+              nullable: true
+            exchange:
+              allOf:
+                - $ref: '#/components/schemas/ComponentHealth'
+              nullable: true
+            critic:
+              allOf:
+                - $ref: '#/components/schemas/ComponentHealth'
+              nullable: true
+        last_cycle_at:
+          type: string
+          nullable: true
+          format: date-time
+        cycle_duration_ms:
+          type: number
+          nullable: true
+        active_event_count:
+          type: integer
+          nullable: true
+        incidents:
+          type: array
+          nullable: true
+          items:
+            $ref: '#/components/schemas/AuditEvent'
+        arming:
+          type: object
+          nullable: true
+          properties:
+            live_mode:
+              type: string
+              nullable: true
+            armed:
+              type: boolean
+              nullable: true
+            validate_only:
+              type: boolean
+              nullable: true
+            max_order_usd:
+              type: number
+              nullable: true
+        reconciliation:
+          type: object
+          nullable: true
+          properties:
+            as_of:
+              type: string
+              nullable: true
+              format: date-time
+            state:
+              type: string
+              nullable: true
+            matched:
+              type: integer
+              nullable: true
+            adopted:
+              type: integer
+              nullable: true
+            unpriceable:
+              type: integer
+              nullable: true
+            missing_on_exchange:
+              type: integer
+              nullable: true
+            reason:
+              type: string
+              nullable: true
+      x-implementation-status: requested
+    AuditEventsResponse:
+      type: object
+      nullable: true
+      properties:
+        as_of:
+          type: string
+          nullable: true
+          format: date-time
+        generated_at:
+          type: string
+          nullable: true
+          format: date-time
+        snapshot_id:
+          type: string
+          nullable: true
+        stale_after_seconds:
+          type: number
+          nullable: true
+        events:
+          type: array
+          nullable: true
+          items:
+            $ref: '#/components/schemas/AuditEvent'
+        next_cursor:
+          type: string
+          nullable: true
+        active_count:
+          type: integer
+          nullable: true
+      x-implementation-status: requested
+    ExecutionQuality:
+      type: object
+      nullable: true
+      properties:
+        slippage_bps:
+          type: number
+          nullable: true
+          description: Positive is adverse for both BUY and SELL; see BACKEND_UI_HANDOFF.md for formula.
+        reference:
+          type: string
+          nullable: true
+        reference_price:
+          type: number
+          nullable: true
+        reference_at:
+          type: string
+          nullable: true
+          format: date-time
+        fees:
+          type: number
+          nullable: true
+        fee_currency:
+          type: string
+          nullable: true
+        fill_time_ms:
+          type: number
+          nullable: true
+          description: Submission to final fill; null for incomplete/unknown timing.
+        unavailable_reason:
+          type: string
+          nullable: true
+      x-implementation-status: requested
+    ExecutionEvent:
+      type: object
+      nullable: true
+      properties:
+        id:
+          type: string
+        stage:
+          type: string
+          nullable: true
+        occurred_at:
+          type: string
+          nullable: true
+          format: date-time
+        detail:
+          type: string
+          nullable: true
+      required:
+        - id
+      x-implementation-status: requested
+    OrderExecution:
+      type: object
+      nullable: true
+      properties:
+        order_id:
+          type: string
+        decision_id:
+          type: string
+          nullable: true
+        symbol:
+          type: string
+          nullable: true
+        side:
+          type: string
+          nullable: true
+        status:
+          type: string
+          nullable: true
+        trigger_type:
+          type: string
+          nullable: true
+        requested_quantity:
+          type: number
+          nullable: true
+        filled_quantity:
+          type: number
+          nullable: true
+        average_fill_price:
+          type: number
+          nullable: true
+        currency:
+          type: string
+          nullable: true
+        quality:
+          allOf:
+            - $ref: '#/components/schemas/ExecutionQuality'
+          nullable: true
+        events:
+          type: array
+          nullable: true
+          items:
+            $ref: '#/components/schemas/ExecutionEvent'
+      required:
+        - order_id
+      x-implementation-status: requested
+    PositionProtection:
+      type: object
+      nullable: true
+      properties:
+        allocation_pct:
+          type: number
+          nullable: true
+        effective_stop_price:
+          type: number
+          nullable: true
+        stop_distance_pct:
+          type: number
+          nullable: true
+        free_quantity:
+          type: number
+          nullable: true
+        bonded_quantity:
+          type: number
+          nullable: true
+        mechanism:
+          type: string
+          nullable: true
+        executable:
+          type: boolean
+          nullable: true
+        reason:
+          type: string
+          nullable: true
+      x-implementation-status: requested

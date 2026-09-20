@@ -48,3 +48,30 @@ test('benchmark failures retain the backend reason', async () => {
   globalThis.fetch = async () => Response.json({ detail: 'Benchmark venue unreachable' }, { status: 502 });
   await assert.rejects(api.getEvaluationCurves('live-real'), /502.*Benchmark venue unreachable/);
 });
+
+test('optional monitor resources tolerate an older backend', async () => {
+  for (const status of [404, 501, 204]) {
+    globalThis.fetch = async () => new Response(null, { status });
+    assert.equal(await api.getEngineTelemetry('live-real'), null);
+    assert.equal(await api.getEngineEvents('live-real'), null);
+    assert.equal(await api.getOrderExecution('live-real', 'order-1'), null);
+  }
+  capture(null);
+  assert.equal(await api.getEngineTelemetry('live-real'), null);
+});
+
+test('optional monitor reads retain auth and operational failures', async () => {
+  for (const status of [401, 403, 500, 503]) {
+    globalThis.fetch = async () => Response.json({ detail: 'Cannot read state' }, { status });
+    await assert.rejects(api.getEngineTelemetry('live-real'), error => error.status === status && error.message.includes('Cannot read state'));
+  }
+});
+
+test('event cursor and order identities are encoded without changing scope', async () => {
+  const urls = capture();
+  await api.getEngineEvents('live/real', 'cursor/a+b=');
+  await api.getOrderExecution('live/real', 'order/#1');
+  assert.equal(urls[0].pathname, '/api/engine/live%2Freal/events');
+  assert.equal(urls[0].searchParams.get('cursor'), 'cursor/a+b=');
+  assert.equal(urls[1].pathname, '/api/engine/live%2Freal/orders/order%2F%231');
+});

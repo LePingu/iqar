@@ -1,4 +1,5 @@
 import type {
+  EngineTelemetry, AuditEventsResponse, OrderExecution,
   SystemStatus,
   BacktestConfig,
   BacktestSummary,
@@ -38,6 +39,14 @@ import type {
 
 const API_BASE = '/api';
 
+export class ApiError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${url}`, options);
   if (!response.ok) {
@@ -53,9 +62,20 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
     } catch {
       // No JSON body — the status line alone carries the error.
     }
-    throw new Error(`API Error: ${response.status} ${response.statusText}${detail ? ` — ${detail}` : ''}`);
+    throw new ApiError(response.status, `API Error: ${response.status} ${response.statusText}${detail ? ` — ${detail}` : ''}`);
   }
+  if (response.status === 204) return null as T;
   return response.json();
+}
+
+// Only explicitly unsupported resources become unavailable; auth and service
+// failures remain errors so a disconnected system cannot appear healthy.
+async function fetchOptional<T>(url: string): Promise<T | null> {
+  try { return await fetchJson<T | null>(url); }
+  catch (error) {
+    if (error instanceof ApiError && [404, 501].includes(error.status)) return null;
+    throw error;
+  }
 }
 
 function decisionBase(source: DecisionSource) {
@@ -65,6 +85,16 @@ function decisionBase(source: DecisionSource) {
 }
 
 export const api = {
+  getEngineTelemetry: (sessionId: string) =>
+    fetchOptional<EngineTelemetry>(`/engine/${encodeURIComponent(sessionId)}/telemetry`),
+  getEngineEvents: (sessionId: string, cursor?: string) => {
+    const params = new URLSearchParams({ limit: '50' });
+    if (cursor) params.set('cursor', cursor);
+    return fetchOptional<AuditEventsResponse>(`/engine/${encodeURIComponent(sessionId)}/events?${params}`);
+  },
+  getOrderExecution: (sessionId: string, orderId: string) =>
+    fetchOptional<OrderExecution>(`/engine/${encodeURIComponent(sessionId)}/orders/${encodeURIComponent(orderId)}`),
+
   getDecisions: (source: DecisionSource, filters: {
     symbol?: string; action?: string; executed?: boolean; outcome?: string;
     since?: string; until?: string; limit?: number; offset?: number;

@@ -52,7 +52,7 @@ export function AppLayout() {
         {/* Logo */}
         <div className="flex items-center justify-between px-4 py-4 border-b border-[var(--color-border)]">
           <div className="flex items-center gap-2.5">
-            <img src={logoUrl} alt="IQAR Logo" className="h-8 w-auto object-contain" />
+            <span className="app-wordmark">IQAR</span>
           </div>
           <button
             className="md:hidden text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]"

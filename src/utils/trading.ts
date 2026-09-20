@@ -1,10 +1,12 @@
-export function fmtPrice(x: number): string {
+export function fmtPrice(x: number | null | undefined): string {
+  if (x == null || !Number.isFinite(x)) return '—';
   if (Math.abs(x) >= 1) return x.toFixed(2);
   if (x === 0) return '0.00';
   return x.toFixed(Math.max(2, 2 - Math.floor(Math.log10(Math.abs(x)))));
 }
 
-export function formatMoney(value: number, currency = 'USD', decimals = 2): string {
+export function formatMoney(value: number | null | undefined, currency = 'USD', decimals = 2): string {
+  if (value == null || !Number.isFinite(value)) return '—';
   try {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -31,11 +33,13 @@ export function formatCurrency(value: number, decimals = 2): string {
   return formatMoney(value, 'USD', decimals);
 }
 
-export function formatPercentage(value: number, decimals = 2): string {
+export function formatPercentage(value: number | null | undefined, decimals = 2): string {
+  if (value == null || !Number.isFinite(value)) return '—';
   return `${value >= 0 ? '+' : ''}${value.toFixed(decimals)}%`;
 }
 
-export function formatDate(timestamp: number | string): string {
+export function formatDate(timestamp: number | string | null | undefined): string {
+  if (timestamp == null) return 'Not recorded';
   const date = typeof timestamp === 'string' ? new Date(timestamp) : new Date(timestamp * 1000);
-  return date.toLocaleString();
+  return Number.isFinite(date.getTime()) ? date.toLocaleString() : 'Not recorded';
 }
