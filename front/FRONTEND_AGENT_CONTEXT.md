@@ -1,5 +1,9 @@
 # Trader-Strat Frontend: Agent Context & Guidelines
 
+> **Returning agent?** §7 (hand-off log) lists what changed in the backend contract since
+> the last hand-off, newest first, with the section each change lives in. Read it before
+> anything else; `openapi.yaml` beside this file is the exact schema.
+
 ## 1. System Overview (The Backend Context)
 You are an AI agent tasked with building the "Control Tower" frontend for **Trader-Strat**, an advanced cryptocurrency backtesting and live-trading research system. 
 
@@ -157,6 +161,11 @@ Set up the TanStack Router with these five routes. They map directly to the endp
 endpoints for the engine):
 - `GET /api/engine/{session_id}/status` — kill-switch state, risk limits, alive ping. Poll every 15 s.
 - `GET /api/engine/{session_id}/detail` — positions, fills, equity curve, P&L. Poll every 5 s while active. (Open to any Access user — viewers can watch.)
+- `GET /api/engine/{session_id}/fills?limit=50&offset=N` — fill **history**, newest first,
+  filters `symbol|side|source|since|until`. `recent_fills` in `/detail` is the live feed
+  (last 20); this is how the `RecentFillsFeed` gets a "load older" / date-range control.
+  Page with `before_id=<smallest id on your page>` while the feed is live (offsets drift).
+  Rows carry `id`, `position_id`, `decision_id` (→ §H card), `reason`, `commission`.
 - `POST /api/engine/{session_id}/halt` — disable trading (operator-only; 403 for viewers)
 - `POST /api/engine/{session_id}/resume` — re-enable trading (operator-only)
 - `PUT /api/engine/{session_id}/controls` — update risk limits without restart (operator-only)
@@ -472,6 +481,74 @@ storing them: one reading is a number, a month of them is a trend.
 **Empty state.** `GET .../latest` returns `404` when nothing has been run yet.
 Prompt the operator to run one. Do not render zeros.
 
+### H. Decision explorer + curve overlays (`/live`, `/live/real`, `/backtests/:runId`)
+
+**Purpose**: every buy and sell card explains itself, and the equity curve shows the market
+beside the book. Two questions, one navigation: *why did this trade happen?* (card → hover →
+click) and *is the book ahead of just holding?* (overlays on the curve).
+
+**Data sources** (all read-only; auth = any Access user)
+
+- `GET /api/evaluation/{session_id}/curves?window_days=30` → `EvaluationCurves`. Poll every
+  60 s. Series `equity`, `equal_weight`, `btc`, `exposure_matched`, each a list of
+  `{timestamp, index, value}` on one hourly grid, **indexed to 100 at `anchor`**. `markers[]`
+  are the engine's fills with `decision_id` and `book_index` (where on the book's curve to
+  draw them). `502` = benchmark venue unreachable (render the reason, never a flat line);
+  `404` = unknown session; `422` = `since` not before `until`.
+- `GET /api/oracle/{session_id}/decisions` (live sessions) and
+  `GET /api/backtests/{run_id}/decisions` (runs) → `DecisionsResponse`, newest first,
+  paged (`limit` ≤ 500). Filters: `symbol`, `action` (buy|sell|hold), `executed`
+  (true|false), `outcome`, `since`, `until`. **Every decision the orchestrator produced is a
+  row, executed or not** — `executed=false` is the book of what was declined.
+- `GET …/decisions/{decision_id}` → `DecisionDetail`: the summary, the typed `context`
+  (the full path), `features`, and the `opened_lots` / `closed_lots` / `fills` that point back
+  at this decision. On a run, `mode` is `"backtest"` and `trace_files` is empty.
+- Lots and fills now carry the link: `OracleLot.entry_decision_id` / `exit_decision_id`,
+  `OracleFill.decision_id` (all nullable — see *Semantics*).
+
+**Components**
+
+- `LiveEquityCurve` gains **overlays**: `equal_weight` (muted gold), `btc` (muted grey),
+  `exposure_matched` (dashed gold). Each toggleable in the legend. The legend states the
+  anchor date and, when `anchored_on_rebuild` is true, "since last rebuild" — the series
+  deliberately start at the last deploy/recovery that reset the book, because a comparison
+  drawn across one is meaningless. Draw `markers` at `(timestamp, book_index)`: ▲ buy, ▼ sell.
+  Empty series come with a `notes` entry saying why (no priced snapshot, venue coverage,
+  stretch shorter than an hour) — render the note, never a flat line or a zero.
+- `DecisionCard` replaces the bare fill row in `RecentFillsFeed` and the trade rows in
+  `TradesGrid`: symbol · side · price · confidence · an **outcome chip**. **Hover** opens a
+  compact popover from `DecisionSummary`: regime label + weight, critic verdict +
+  `critic_reason_code`, `ml_p_profit`, `pm_signal`, MTF choppy, `position_size` vs
+  `resolved_size`. Hovering a card highlights its marker on the curve and vice-versa
+  (shared `decision_id`).
+- `DecisionPathDrawer` opens on **click** and renders `DecisionDetail.context` as a vertical
+  timeline in this order: `regime` → `signals` (pattern / sentiment / correlation / risk,
+  consensus, weights) → `mtf` → `critic` (verdict, reason, `clamped`) →
+  `position_manager` (raw size, `kelly_info`) → `adjustments[]` as a step list
+  (`sell_critic`, `critic_modulate`, `confidence_floor`, `size_scale`; show `fired`, and
+  size/confidence before → after) → the engine's `outcome` + `outcome_detail` → the linked
+  lots and fills. Marker with `decision_id: null` = a mechanical exit (stop / trail /
+  force-close): open the lot's lineage instead, headed by `exit_reason`.
+- `DeclinedBook` tab on the live dashboard: `executed=false`, grouped by `outcome` — what the
+  engine did not buy, and which gate said no. This is half of what entry skill means.
+
+**Semantics — read before rendering**
+
+- `outcome` values: `filled`, `closed_lots` (the two with `executed: true`), `hold`,
+  `no_price`, `skipped_cycle_cap`, `gate_entry`, `gate_dual_portfolio`, `sized_to_zero`,
+  `refused_before_rotation`, `gate_extension`, `gate_governor`, `no_order`, `guard_blocked`,
+  `not_filled`, `no_lots_to_close`, `sell_bypassed_trend_up`, `sell_suppressed_protected`,
+  `sell_not_filled`. Chip colour by family: executed / declined-by-gate / hold / not-filled.
+- `context: null` means the decision was recorded before the path existed (or replayed from
+  an old file): show "no path recorded", not an empty timeline.
+- `decided_at` is the engine's clock — bar time on a run, wall clock live — not the fill time.
+- **Null is not zero, anywhere in these payloads** (same rule as §G). `regime_weight: null`
+  means the legacy hard gate was in force; `price: null` means the engine had no price.
+- Before the backend carrying this is deployed, `/decisions` returns `total_matching: 0`
+  for a live session: render "no decisions recorded yet", not an error and not zeros.
+- Never compute a benchmark client-side from fill prices; the curves come from exchange
+  bars fetched for the purpose.
+
 ## 5. Connecting the Frontend to the Backend
 
 The frontend is deployed **on the same OVH Public Cloud instance** as the backend, as a
@@ -605,3 +682,34 @@ Build in this order — later views depend on components from earlier ones:
 6. **Live placeholder (`/live`)** — last; one banner component, no logic.
 
 Present the layout and routing skeleton to the user before building charting integrations.
+
+---
+
+## 7. Hand-off log (what changed in the contract, newest first)
+
+Each entry: date · what a frontend agent must do · where it is specified. `openapi.yaml`
+beside this file is the exact schema for every item; `GET /openapi.json` on a running tower
+is the same contract as served.
+
+### 2026-09-19 — decision identity, decision explorer, curve overlays
+
+- **New views**: §H (decision cards with hover/click, the decision-path drawer, the declined
+  book, and the equity-curve overlays). Fits into Route E (`/live`), F (`/live/real`) and
+  C (`/backtests/:runId`) — no new top-level route required.
+- **New endpoints**: `GET /api/oracle/{session_id}/decisions`,
+  `GET /api/oracle/{session_id}/decisions/{decision_id}`,
+  `GET /api/backtests/{run_id}/decisions`, `GET /api/backtests/{run_id}/decisions/{decision_id}`,
+  `GET /api/evaluation/{session_id}/curves`.
+- **Fill history**: `GET /api/engine/{session_id}/fills` (`PaginatedLiveFills`) — §E data
+  sources. `LiveFill` gained `id`, `position_id`, `decision_id`, `reason`, `commission`.
+  `LiveEngineDetail.recent_fills` unchanged (still the last 20).
+- **New schemas**: `DecisionSummary`, `DecisionDetail`, `DecisionsResponse`, `EvaluationCurves`,
+  `CurvePointModel`, `FillMarkerModel`.
+- **Existing schemas gained fields** (additive, nullable): `OracleLot.entry_decision_id`,
+  `OracleLot.exit_decision_id`, `OracleFill.decision_id`. Existing views keep working
+  unchanged; the lineage view (§ oracle lots) can now link a fill to its decision.
+- **Behaviour to know**: decisions are recorded by the engine from the deploy that carries
+  this onward; earlier lots have `entry_decision_id: null`. The curves endpoint caches
+  benchmark prices for 15 minutes — poll it, do not debounce it further.
+- **Not in the backend yet**: statistical confidence (null-model percentiles, bootstrap
+  intervals) and external-bot comparison. When they land they will appear here first.

@@ -238,3 +238,25 @@
     @apply fixed inset-0 bg-black/50 z-30;
   }
 }
+/* Decision inspection uses the dashboard's existing color tokens. */
+.decision-toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 12px 0; }
+.decision-toolbar label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.decision-toolbar input, .decision-toolbar select { max-width: 200px; }
+.decision-card { position: relative; margin: 8px 0; padding: 8px; border: 1px solid var(--color-border); border-radius: 8px; }
+.decision-card.is-highlighted, .decision-card:focus-within { border-color: var(--color-gold-accent); }
+.decision-open { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; text-align: left; width: 100%; padding: 8px; cursor: pointer; font-size: 13px; }
+.decision-card time { font-size: 11px; color: var(--color-text-muted); }
+.decision-popover { position: absolute; z-index: 20; top: 100%; left: 0; width: min(420px, 90vw); padding: 16px; background: var(--color-bg-surface); border: 1px solid var(--color-gold-accent); border-radius: 8px; box-shadow: 0 8px 30px #0008; pointer-events: none; }
+.decision-fields { font-size: 12px; margin: 12px 0; }
+.decision-fields > div { display: grid; grid-template-columns: minmax(100px, 1fr) 2fr; gap: 12px; padding: 5px 0; border-bottom: 1px solid var(--color-border); }
+.decision-fields dt { color: var(--color-text-muted); }
+.decision-fields dd { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
+.decision-drawer { position: fixed; inset: 0 0 0 auto; margin: 0; width: min(640px, 100vw); height: 100dvh; max-height: 100dvh; padding: 24px; color: var(--color-text-primary); background: var(--color-bg-surface); border: 1px solid var(--color-border); overflow-y: auto; }
+.decision-drawer::backdrop { background: #0009; backdrop-filter: blur(3px); }
+.decision-drawer h2 { font-size: 22px; margin: 16px 0; }
+.decision-drawer h3 { color: var(--color-gold-accent); margin: 16px 0 8px; }
+.decision-timeline { border-left: 2px solid var(--color-gold-accent); padding-left: 20px; }
+.outcome-executed { color: var(--color-green); }
+.outcome-declined { color: var(--color-gold-accent); }
+.outcome-hold { color: var(--color-text-muted); }
+.outcome-unfilled { color: var(--color-red); }

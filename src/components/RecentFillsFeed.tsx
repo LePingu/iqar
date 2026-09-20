@@ -1,3 +1,4 @@
+import { DecisionCard } from './DecisionExplorer';
 import type { LiveFill } from '../types/api';
 import { fmtPrice, formatMoney, formatPercentage, currencySymbol } from '../utils/trading';
 
@@ -28,7 +29,7 @@ export function RecentFillsFeed({ fills, frozen = false, currency = 'USD' }: Rec
           fill.venue_market != null;
 
         return (
-          <div key={idx} className="flex flex-col gap-0.5 px-3 py-2 rounded-md bg-[var(--color-bg-hover)] border border-[var(--color-border)]">
+          <DecisionCard key={fill.id ?? idx} decisionId={fill.decision_id} positionId={fill.position_id} reason={fill.reason} symbol={fill.symbol}><div className="flex flex-col gap-0.5 px-3 py-2 rounded-md bg-[var(--color-bg-hover)] border border-[var(--color-border)]">
             <div className="flex justify-between items-center">
               <div className="flex items-center gap-3">
                 <span className={`w-10 font-medium text-xs ${fill.side === 'BUY' ? 'text-positive' : 'text-negative'}`}>
@@ -48,16 +49,20 @@ export function RecentFillsFeed({ fills, frozen = false, currency = 'USD' }: Rec
               <div className="flex items-center gap-4">
                 {showRealizedPnl && (
                   <span className={`font-mono text-xs ${(fill.realized_pnl ?? 0) >= 0 ? 'text-positive' : 'text-negative'}`}>
-                    {(fill.realized_pnl ?? 0) >= 0 ? '+' : ''}{formatMoney(fill.realized_pnl ?? 0, currency)} ({formatPercentage(fill.realized_pnl_pct ?? 0, 1)})
+                    {(fill.realized_pnl ?? 0) >= 0 ? '+' : ''}{formatMoney(fill.realized_pnl ?? 0, currency)} ({fill.realized_pnl_pct == null ? 'Not recorded' : formatPercentage(fill.realized_pnl_pct, 1)})
                   </span>
                 )}
                 <span className="text-[var(--color-text-primary)]">
                   {currencySymbol(currency)}{fmtPrice(fill.price)}
                 </span>
                 <span className="text-[var(--color-text-muted)] text-xs w-18 text-right">
-                  {new Date(fill.timestamp).toLocaleTimeString()}
+                  {new Date(fill.timestamp).toLocaleString()}
                 </span>
               </div>
+            </div>
+            <div className="text-xs text-[var(--color-text-muted)]">
+              {fill.reason && <span>{fill.reason} · </span>}
+              Commission: {fill.commission == null ? 'Not recorded' : fmtPrice(fill.commission)}
             </div>
             {(showNativePrice || showSettleInfo || unconverted) && (
               <div className="flex items-center gap-2 text-[10px] flex-wrap">
@@ -88,7 +93,7 @@ export function RecentFillsFeed({ fills, frozen = false, currency = 'USD' }: Rec
                 )}
               </div>
             )}
-          </div>
+          </div></DecisionCard>
         );
       })}
     </div>

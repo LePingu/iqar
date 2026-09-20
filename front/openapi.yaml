@@ -311,6 +311,93 @@ paths:
                     items:
                       $ref: '#/components/schemas/Trade'
 
+  /api/backtests/{run_id}/decisions:
+    get:
+      tags:
+        - Backtests
+      summary: Decision records for one run, filtered and paged
+      description: |
+        Same shape as `/api/oracle/{session_id}/decisions`, for a backtest run,
+        so one frontend view serves live sessions and runs alike.
+      parameters:
+        - in: path
+          name: run_id
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: symbol
+          schema:
+            type: string
+        - in: query
+          name: action
+          schema:
+            type: string
+          description: buy, sell or hold
+        - in: query
+          name: executed
+          schema:
+            type: boolean
+          description: "true: only decisions that filled or closed lots; false: only the rest"
+        - in: query
+          name: outcome
+          schema:
+            type: string
+        - in: query
+          name: since
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: until
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 100
+            maximum: 500
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: A page of decisions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DecisionsResponse'
+        '404':
+          description: Run not found
+  /api/backtests/{run_id}/decisions/{decision_id}:
+    get:
+      tags:
+        - Backtests
+      summary: One decision's full path for a run
+      parameters:
+        - in: path
+          name: run_id
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: decision_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The decision path
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DecisionDetail'
+        '404':
+          description: Run not found, or no such decision in it
   /api/backtests/{run_id}/assets:
     get:
       tags:
@@ -492,6 +579,76 @@ paths:
           description: No engine session with this id
         '503':
           description: Database not found
+
+  /api/engine/{session_id}/fills:
+    get:
+      tags:
+        - Engine
+      summary: Fill history for a session, newest first, paged
+      description: |
+        `LiveEngineDetail.recent_fills` is the live feed (last 20). This is the
+        history: page with `limit`/`offset`, or — while new fills keep arriving at
+        the top — with `before_id` set to the smallest `id` on the page you have,
+        which never shifts. Reads the session's own table set (a real session's
+        fills live in `real_trades`). Open to any user Access admits.
+      parameters:
+        - in: path
+          name: session_id
+          required: true
+          schema:
+            type: string
+          example: live-paper
+        - in: query
+          name: symbol
+          schema:
+            type: string
+        - in: query
+          name: side
+          schema:
+            $ref: '#/components/schemas/TradeSide'
+        - in: query
+          name: source
+          schema:
+            type: string
+            enum: [engine, exchange]
+        - in: query
+          name: since
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: until
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: before_id
+          schema:
+            type: integer
+            minimum: 1
+          description: Only fills with an id below this one (cursor paging).
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 50
+            maximum: 500
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: A page of fills
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedLiveFills'
+        '404':
+          description: No engine session with this id
+        '422':
+          description: A filter is malformed, or limit exceeds 500
 
   /api/engine/{session_id}/halt:
     post:
@@ -755,6 +912,53 @@ paths:
                 items:
                   $ref: '#/components/schemas/EvaluationSummary'
 
+  /api/evaluation/{session_id}/curves:
+    get:
+      tags:
+        - Evaluation
+      summary: The book's equity beside the market, as aligned series
+      description: |
+        Equal-weight hold of what the engine traded, BTC and the exposure-matched
+        replica on one hourly grid with the book, indexed to 100 at the start of
+        the latest stretch with no book rebuild in it, plus every engine fill as
+        a marker linked to its decision. A read (prices cached 15 minutes), so a
+        dashboard may poll it. `502` when the benchmark venue is unreachable —
+        render the reason, never a flat line.
+      parameters:
+        - in: path
+          name: session_id
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: window_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 120
+        - in: query
+          name: since
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: until
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: The curves
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvaluationCurves'
+        '404':
+          description: Unknown session
+        '422':
+          description: since does not precede until
+        '502':
+          description: Benchmark venue unreachable
   /api/evaluation/reports/{report_id}/download:
     get:
       tags:
@@ -886,6 +1090,97 @@ paths:
                 $ref: '#/components/schemas/LotLineage'
         '404':
           description: Unknown session, or no such lot in it
+  /api/oracle/{session_id}/decisions:
+    get:
+      tags:
+        - Oracle
+      summary: The session's decision records, filtered and paged
+      description: |
+        Every decision the orchestrator produced, newest first, executed or not —
+        a buy the governor refused is a row with `outcome=gate_governor`, so the
+        book of what was declined is as queryable as the book of what was bought.
+      parameters:
+        - in: path
+          name: session_id
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: symbol
+          schema:
+            type: string
+        - in: query
+          name: action
+          schema:
+            type: string
+          description: buy, sell or hold
+        - in: query
+          name: executed
+          schema:
+            type: boolean
+          description: "true: only decisions that filled or closed lots; false: only the rest"
+        - in: query
+          name: outcome
+          schema:
+            type: string
+        - in: query
+          name: since
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: until
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 100
+            maximum: 500
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: A page of decisions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DecisionsResponse'
+        '404':
+          description: Unknown session
+  /api/oracle/{session_id}/decisions/{decision_id}:
+    get:
+      tags:
+        - Oracle
+      summary: One decision's full path
+      description: |
+        Inputs, verdicts, the adjustment sequence, the outcome, and the lots and
+        fills that point back at this decision.
+      parameters:
+        - in: path
+          name: session_id
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: decision_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The decision path
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DecisionDetail'
+        '404':
+          description: Unknown session, or no such decision in it
   /api/oracle/{session_id}/traces:
     get:
       tags:
@@ -1941,6 +2236,56 @@ components:
           type: number
           nullable: true
           description: Realized P&L as a percentage. SELL fills only; null on BUYs.
+        id:
+          type: integer
+          nullable: true
+          description: |
+            The trade row's id — a stable key for a paged list, and what a client
+            passes as `before_id` to page further back.
+        position_id:
+          type: integer
+          nullable: true
+          description: The lot this fill opened or closed (see the oracle's lots / lineage).
+        decision_id:
+          type: string
+          nullable: true
+          description: |
+            The orchestrator decision this fill executed — open it with
+            `GET /api/oracle/{session_id}/decisions/{decision_id}`. Null for a
+            mechanical exit (stop / trail / force-close) or a venue-side fill.
+        reason:
+          type: string
+          nullable: true
+          description: |
+            The close reason on a SELL (`trailing_stop`, `hard_stop`, `ai_signal_market`,
+            `rotation`, ...); `signal` on an engine BUY; `exchange_history` on an ingested row.
+        commission:
+          type: number
+          nullable: true
+    PaginatedLiveFills:
+      type: object
+      description: |
+        A page of a session's fills, newest first — the way back in time that
+        `LiveEngineDetail.recent_fills` (the last 20, for the live feed) is not.
+        `total_matching` counts every fill the filters admit, so a client can page
+        to the end without guessing.
+      properties:
+        session_id:
+          type: string
+        mode:
+          type: string
+          description: paper or real — which table set the fills came from.
+        total_matching:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+        fills:
+          type: array
+          items:
+            $ref: '#/components/schemas/LiveFill'
+      required: [session_id, mode, total_matching, limit, offset, fills]
 
     LiveSnapshot:
       type: object
@@ -2242,6 +2587,16 @@ components:
         venue_market:
           type: string
           nullable: true
+        entry_decision_id:
+          type: string
+          nullable: true
+          description: |
+            The decision that opened the lot (`DecisionSummary.decision_id`). Null for a trailing re-entry or an adopted holding — no decision was made.
+        exit_decision_id:
+          type: string
+          nullable: true
+          description: |
+            The decision whose execution closed the lot. Null for a mechanical close (stop, trail, force-close) — read `exit_reason` instead.
       required: [id, symbol, side, quantity, entry_price, entry_timestamp, status, unrealized_pnl, realized_pnl, transaction_costs]
     OracleFill:
       type: object
@@ -2281,7 +2636,290 @@ components:
         venue_market:
           type: string
           nullable: true
+        decision_id:
+          type: string
+          nullable: true
+          description: |
+            The decision this fill executed; null for a mechanical or venue-side fill.
       required: [id, symbol, side, quantity, price, timestamp, commission, pnl, pnl_pct]
+    CurvePointModel:
+      type: object
+      description: |
+        One sample of a curve. `index` is 100 at the anchor so series of different
+        scale share an axis; `value` is the underlying level (dollars for the book,
+        the basket level for a benchmark).
+      properties:
+        timestamp:
+          type: string
+        index:
+          type: number
+        value:
+          type: number
+      required: [timestamp, index, value]
+    FillMarkerModel:
+      type: object
+      description: One engine fill placed on the curve and linked to its decision.
+      properties:
+        timestamp:
+          type: string
+        symbol:
+          type: string
+        side:
+          type: string
+        price:
+          type: number
+        quantity:
+          type: number
+        pnl:
+          type: number
+          nullable: true
+        pnl_pct:
+          type: number
+          nullable: true
+        reason:
+          type: string
+          nullable: true
+        position_id:
+          type: integer
+          nullable: true
+        decision_id:
+          type: string
+          nullable: true
+          description: Null for a mechanical exit (stop, trail) — there is no decision card to open.
+        book_index:
+          type: number
+          nullable: true
+          description: The book's index at that hour — where to draw the marker.
+      required: [timestamp, symbol, side, price, quantity]
+    EvaluationCurves:
+      type: object
+      description: |
+        The book's equity beside the market on one hourly grid. Every series is
+        indexed to 100 at `anchor` — the start of the latest stretch with no book
+        rebuild in it (`anchored_on_rebuild` says whether that cut a deploy off) —
+        because a comparison drawn across a rebuild is meaningless. `equal_weight`
+        holds `basket` (symbols traded in the stretch) equal-weighted from the
+        anchor; `exposure_matched` keeps the book's own cash fraction and puts the
+        rest in the basket, rebalanced hourly — the fair rung for a 40–70%-invested
+        book. Empty series with a `notes` entry mean "could not measure", never flat.
+      properties:
+        session_id:
+          type: string
+        mode:
+          type: string
+        window_start:
+          type: string
+        window_end:
+          type: string
+        anchor:
+          type: string
+          nullable: true
+        end:
+          type: string
+          nullable: true
+        anchored_on_rebuild:
+          type: boolean
+        basket:
+          type: array
+          items:
+            type: string
+        unavailable:
+          type: array
+          items:
+            type: string
+          description: Traded symbols the venue could not price at the anchor — not in the basket.
+        equity:
+          type: array
+          items:
+            $ref: '#/components/schemas/CurvePointModel'
+        equal_weight:
+          type: array
+          items:
+            $ref: '#/components/schemas/CurvePointModel'
+        btc:
+          type: array
+          items:
+            $ref: '#/components/schemas/CurvePointModel'
+        exposure_matched:
+          type: array
+          items:
+            $ref: '#/components/schemas/CurvePointModel'
+        markers:
+          type: array
+          items:
+            $ref: '#/components/schemas/FillMarkerModel'
+        discontinuities:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        notes:
+          type: array
+          items:
+            type: string
+      required: [session_id, mode, window_start, window_end]
+    DecisionSummary:
+      type: object
+      description: |
+        One orchestrator decision and what the engine did with it — the card.
+        `executed` is true only for a filled buy or a sell that closed lots; `outcome`
+        names the path either way, so a declined buy says which gate declined it.
+      properties:
+        decision_id:
+          type: string
+          description: The orchestrator's workflow id; what lots and fills point at.
+        decided_at:
+          type: string
+          description: The engine's clock when it decided — bar time in a backtest, wall clock live.
+        symbol:
+          type: string
+        action:
+          type: string
+          description: buy, sell or hold (as the orchestrator emitted it).
+        confidence:
+          type: number
+        position_size:
+          type: number
+          description: Dollar size after the orchestrator's adjustments (critic, floor, scaler).
+        price:
+          type: number
+          nullable: true
+          description: The engine's price for the symbol at decision time; null when it had none.
+        executed:
+          type: boolean
+        outcome:
+          type: string
+          description: |
+            `filled`, `closed_lots`, `hold`, `no_price`, `skipped_cycle_cap`, `gate_entry`,
+            `gate_dual_portfolio`, `sized_to_zero`, `refused_before_rotation`, `gate_extension`,
+            `gate_governor`, `no_order`, `guard_blocked`, `not_filled`, `no_lots_to_close`,
+            `sell_bypassed_trend_up`, `sell_suppressed_protected`, `sell_not_filled`.
+        outcome_detail:
+          type: string
+          nullable: true
+        resolved_size:
+          type: number
+          nullable: true
+          description: Dollar size after the engine's own sizing sequence, when it ran.
+        position_id:
+          type: integer
+          nullable: true
+          description: The lot this decision opened, when it did.
+        reasoning:
+          type: string
+        stop_loss:
+          type: number
+          nullable: true
+        take_profit:
+          type: number
+          nullable: true
+        trail_stop_pct:
+          type: number
+          nullable: true
+        pattern_confidence:
+          type: number
+        agent_consensus:
+          type: number
+        risk_score:
+          type: number
+        ml_p_profit:
+          type: number
+          nullable: true
+        regime_label:
+          type: string
+          nullable: true
+        regime_confidence:
+          type: number
+          nullable: true
+        regime_weight:
+          type: number
+          nullable: true
+          description: Continuous regime weight in [0, 1]; null means the legacy hard gate was in force.
+        critic_agree:
+          type: boolean
+          nullable: true
+        critic_reason_code:
+          type: string
+          nullable: true
+        critic_parse_failed:
+          type: boolean
+          nullable: true
+        pm_signal:
+          type: string
+          nullable: true
+        mtf_is_choppy:
+          type: boolean
+          nullable: true
+        mtf_trend_score:
+          type: number
+          nullable: true
+      required: [decision_id, decided_at, symbol, action, confidence, position_size, executed, outcome]
+    DecisionDetail:
+      type: object
+      description: |
+        The full decision path for one decision. `context` is the typed DecisionContext
+        the orchestrator attached — every agent's inputs (`signals`), the critic's verdict
+        (`critic`), the regime read (`regime`), the position manager's raw output
+        (`position_manager`), the multi-timeframe read (`mtf`) and `adjustments`: the
+        sequence of steps (sell_critic, critic_modulate, confidence_floor, size_scale)
+        with `fired` and size/confidence before and after each. Null for decisions
+        recorded before the context existed.
+      properties:
+        session_id:
+          type: string
+        mode:
+          type: string
+          description: paper, real or backtest.
+        decision:
+          $ref: '#/components/schemas/DecisionSummary'
+        context:
+          type: object
+          nullable: true
+          additionalProperties: true
+        features:
+          type: object
+          nullable: true
+          additionalProperties:
+            type: number
+          description: ML-1 setup features at decision time.
+        opened_lots:
+          type: array
+          items:
+            $ref: '#/components/schemas/OracleLot'
+        closed_lots:
+          type: array
+          items:
+            $ref: '#/components/schemas/OracleLot'
+        fills:
+          type: array
+          items:
+            $ref: '#/components/schemas/OracleFill'
+        trace_files:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+          description: Decision-trace files being written at the time (the raw archive); empty for a backtest.
+      required: [session_id, mode, decision]
+    DecisionsResponse:
+      type: object
+      description: A bounded page of decision records, newest first.
+      properties:
+        session_id:
+          type: string
+        mode:
+          type: string
+        total_matching:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+        decisions:
+          type: array
+          items:
+            $ref: '#/components/schemas/DecisionSummary'
+      required: [session_id, mode, total_matching, limit, offset, decisions]
     LotLineage:
       type: object
       description: |

@@ -1,3 +1,4 @@
+import { DecisionProvider, DecisionBook } from '../components/DecisionExplorer';
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
@@ -163,7 +164,7 @@ function TradesGrid({ runId }: { runId: string }) {
   );
 }
 
-export function RunDetail() {
+function RunDetailContent() {
   const { runId } = useParams({ strict: false });
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const [selectedAsset, setSelectedAsset] = useState<string | null>(null);
@@ -346,6 +347,12 @@ export function RunDetail() {
 
       {/* Trades Grid */}
       {runId && <TradesGrid runId={runId} />}
+      <DecisionBook />
     </div>
   );
+}
+
+export function RunDetail() {
+ const { runId } = useParams({ strict: false });
+ return <DecisionProvider key={runId} source={{ kind: 'run', runId: runId as string }}><RunDetailContent /></DecisionProvider>;
 }

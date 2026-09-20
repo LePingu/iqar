@@ -1,3 +1,6 @@
+import { DecisionProvider, DecisionBook } from '../components/DecisionExplorer';
+import { EvaluationCurve } from '../components/EvaluationCurve';
+import { FillHistory } from '../components/FillHistory';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
 import { GlassCard } from '../components/GlassCard';
@@ -29,7 +32,7 @@ function isStale(isoString: string | null): boolean {
   return Date.now() - new Date(isoString).getTime() > STALE_ACCOUNT_MS;
 }
 
-export function LiveRealDashboard() {
+function LiveRealDashboardContent() {
   const queryClient = useQueryClient();
 
   const { data: engineStatus, isLoading: engineLoading, error: engineError } = useQuery({
@@ -347,6 +350,8 @@ export function LiveRealDashboard() {
       {/* Equity curve — starts at observed_from; no curve exists before observation began */}
       <div className="flex flex-col gap-1.5">
         <LiveEquityCurve equityCurve={liveData?.equity_curve ?? []} title="Real Engine Equity Curve" />
+      <EvaluationCurve sessionId={SESSION_ID} />
+      <DecisionBook />
         {observedFrom && (
           <p className="text-xs text-[var(--color-text-muted)]">
             Observation began {new Date(observedFrom).toLocaleString()} — this is when the engine
@@ -369,9 +374,14 @@ export function LiveRealDashboard() {
           <h3 className="section-title">Recent Fills</h3>
           <div className="flex-1 overflow-y-auto">
             <RecentFillsFeed fills={liveData?.recent_fills ?? []} currency={bookCurrency} />
+            <FillHistory sessionId={SESSION_ID} currency={bookCurrency} />
           </div>
         </GlassCard>
       </div>
     </div>
   );
+}
+
+export function LiveRealDashboard() {
+  return <DecisionProvider source={{ kind: 'session', sessionId: SESSION_ID }}><LiveRealDashboardContent /></DecisionProvider>;
 }

@@ -19,6 +19,7 @@ import type {
   RealAccountStatus,
   EvaluationReportResponse,
   EvaluationSummary,
+  EvaluationCurves,
   OracleSessionSummary,
   OracleLotsResponse,
   LotLineage,
@@ -28,6 +29,11 @@ import type {
   LlmCallsResponse,
   ContinuityReport,
   LogTailResponse,
+  PaginatedLiveFills,
+  DecisionDetail,
+  DecisionsResponse,
+  DecisionSource,
+  TradeSide,
 } from '../types/api';
 
 const API_BASE = '/api';
@@ -52,7 +58,26 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   return response.json();
 }
 
+function decisionBase(source: DecisionSource) {
+  return source.kind === 'session'
+    ? `/oracle/${encodeURIComponent(source.sessionId)}/decisions`
+    : `/backtests/${encodeURIComponent(source.runId)}/decisions`;
+}
+
 export const api = {
+  getDecisions: (source: DecisionSource, filters: {
+    symbol?: string; action?: string; executed?: boolean; outcome?: string;
+    since?: string; until?: string; limit?: number; offset?: number;
+  } = {}) => {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value != null && value !== '') params.set(key, String(value));
+    });
+    return fetchJson<DecisionsResponse>(`${decisionBase(source)}?${params}`);
+  },
+  getDecision: (source: DecisionSource, decisionId: string) =>
+    fetchJson<DecisionDetail>(`${decisionBase(source)}/${encodeURIComponent(decisionId)}`),
+
   // System
   getSystemStatus: () => fetchJson<SystemStatus>('/system/status'),
   getSystemConfig: () => fetchJson<BacktestConfig>('/system/config'),
@@ -105,6 +130,35 @@ export const api = {
 
   getEngineDetail: (sessionId: string) =>
     fetchJson<LiveEngineDetail>(`/engine/${sessionId}/detail`),
+
+  // Fill history — the way back in time that /detail's recent_fills (last 20,
+  // the live feed) is not. While new fills keep arriving at the top, page with
+  // `before_id` (the smallest id on the page you have): it never shifts.
+  getEngineFills: (
+    sessionId: string,
+    opts: {
+      symbol?: string;
+      side?: TradeSide;
+      source?: 'engine' | 'exchange';
+      since?: string;
+      until?: string;
+      before_id?: number;
+      limit?: number;
+      offset?: number;
+    } = {},
+  ) => {
+    const params = new URLSearchParams();
+    if (opts.symbol) params.set('symbol', opts.symbol);
+    if (opts.side) params.set('side', opts.side);
+    if (opts.source) params.set('source', opts.source);
+    if (opts.since) params.set('since', opts.since);
+    if (opts.until) params.set('until', opts.until);
+    if (opts.before_id != null) params.set('before_id', String(opts.before_id));
+    if (opts.limit != null) params.set('limit', String(opts.limit));
+    if (opts.offset != null) params.set('offset', String(opts.offset));
+    const qs = params.toString();
+    return fetchJson<PaginatedLiveFills>(`/engine/${sessionId}/fills${qs ? `?${qs}` : ''}`);
+  },
 
   haltEngine: (sessionId: string) =>
     fetchJson<{ queued: string; session_id: string }>(`/engine/${sessionId}/halt`, {
@@ -161,6 +215,21 @@ export const api = {
 
   getEvaluationHistory: (sessionId: string, limit = 30) =>
     fetchJson<EvaluationSummary[]>(`/evaluation/${sessionId}/history?limit=${limit}`),
+
+  // The book's equity beside the market, as aligned indexed series with fill
+  // markers. A cached read (benchmark prices cached 15 min) — poll it, do not
+  // debounce it further. 502 = benchmark venue unreachable: render the reason.
+  getEvaluationCurves: (
+    sessionId: string,
+    range?: { windowDays?: number; since?: string; until?: string },
+  ) => {
+    const params = new URLSearchParams();
+    if (range?.windowDays != null) params.set('window_days', String(range.windowDays));
+    if (range?.since) params.set('since', range.since);
+    if (range?.until) params.set('until', range.until);
+    const qs = params.toString();
+    return fetchJson<EvaluationCurves>(`/evaluation/${sessionId}/curves${qs ? `?${qs}` : ''}`);
+  },
 
   // Direct link only — the endpoint sets Content-Disposition itself.
   evaluationDownloadUrl: (reportId: number) =>

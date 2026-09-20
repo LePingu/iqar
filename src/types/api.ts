@@ -286,6 +286,18 @@ export interface LiveFill {
   timestamp: string;
   realized_pnl: number | null;
   realized_pnl_pct: number | null;
+  /** Stable row id — the `before_id` cursor for fill-history paging. */
+  id?: number | null;
+  /** The lot this fill opened or closed (see the oracle's lots / lineage). */
+  position_id?: number | null;
+  /**
+   * The orchestrator decision this fill executed — opens the decision card.
+   * Null for a mechanical exit (stop / trail / force-close) or a venue-side fill.
+   */
+  decision_id?: string | null;
+  /** Close reason on a SELL; `signal` on an engine BUY; `exchange_history` on an ingested row. */
+  reason?: string | null;
+  commission?: number | null;
 }
 
 export interface RealAccountStatus {
@@ -456,6 +468,16 @@ export interface OracleLot {
   basis_source?: BasisSource;
   adopted_at?: string | null;
   venue_market?: string | null;
+  /**
+   * The decision that opened the lot. Null for a trailing re-entry or an
+   * adopted holding — no decision was made.
+   */
+  entry_decision_id?: string | null;
+  /**
+   * The decision whose execution closed the lot. Null for a mechanical close
+   * (stop, trail, force-close) — read `exit_reason` instead.
+   */
+  exit_decision_id?: string | null;
 }
 
 /** One fill chained to a lot — the trade that actually moved money. */
@@ -475,6 +497,8 @@ export interface OracleFill {
   source?: 'engine' | 'exchange';
   settle_currency?: string | null;
   venue_market?: string | null;
+  /** The decision this fill executed; null for a mechanical or venue-side fill. */
+  decision_id?: string | null;
 }
 
 /** The full chain for one lot: the position, its fills, its trace files. */
@@ -551,3 +575,192 @@ export interface LogTailResponse {
   truncated: boolean;
   lines: string[];
 }
+
+// --- Decision explorer + curve overlays (§H) ---
+
+/** A page of a session's fill history, newest first (GET /api/engine/{id}/fills). */
+export interface PaginatedLiveFills {
+  session_id: string;
+  mode: string;
+  total_matching: number;
+  limit: number;
+  offset: number;
+  fills: LiveFill[];
+}
+
+/** One sample of a curve. `index` is 100 at the anchor; `value` is the level. */
+export interface CurvePoint {
+  timestamp: string;
+  index: number;
+  value: number;
+}
+
+/** One engine fill placed on the curve and linked to its decision. */
+export interface FillMarker {
+  timestamp: string;
+  symbol: string;
+  side: string;
+  price: number;
+  quantity: number;
+  pnl?: number | null;
+  pnl_pct?: number | null;
+  reason?: string | null;
+  position_id?: number | null;
+  /** Null for a mechanical exit (stop, trail) — there is no decision card to open. */
+  decision_id?: string | null;
+  /** The book's index at that hour — where to draw the marker. */
+  book_index?: number | null;
+}
+
+/**
+ * The book's equity beside the market on one hourly grid, every series indexed
+ * to 100 at `anchor` (the start of the latest stretch with no book rebuild in
+ * it — a comparison drawn across a rebuild is meaningless). Empty series with a
+ * `notes` entry mean "could not measure", never flat.
+ */
+export interface EvaluationCurves {
+  session_id: string;
+  mode: string;
+  window_start: string;
+  window_end: string;
+  anchor?: string | null;
+  end?: string | null;
+  anchored_on_rebuild?: boolean;
+  /** Symbols traded in the stretch, equal-weighted from the anchor. */
+  basket?: string[];
+  /** Traded symbols the venue could not price at the anchor — not in the basket. */
+  unavailable?: string[];
+  equity?: CurvePoint[];
+  equal_weight?: CurvePoint[];
+  btc?: CurvePoint[];
+  exposure_matched?: CurvePoint[];
+  markers?: FillMarker[];
+  discontinuities?: Record<string, unknown>[];
+  notes?: string[];
+}
+
+export type DecisionOutcome =
+  | 'filled'
+  | 'closed_lots'
+  | 'hold'
+  | 'no_price'
+  | 'skipped_cycle_cap'
+  | 'gate_entry'
+  | 'gate_dual_portfolio'
+  | 'sized_to_zero'
+  | 'refused_before_rotation'
+  | 'gate_extension'
+  | 'gate_governor'
+  | 'no_order'
+  | 'guard_blocked'
+  | 'not_filled'
+  | 'no_lots_to_close'
+  | 'sell_bypassed_trend_up'
+  | 'sell_suppressed_protected'
+  | 'sell_not_filled';
+
+/**
+ * One orchestrator decision and what the engine did with it — the card.
+ * `executed` is true only for a filled buy or a sell that closed lots;
+ * `outcome` names the path either way, so a declined buy says which gate
+ * declined it.
+ */
+export interface DecisionSummary {
+  /** The orchestrator's workflow id; what lots and fills point at. */
+  decision_id: string;
+  /** The engine's clock when it decided — bar time in a backtest, wall clock live. */
+  decided_at: string;
+  symbol: string;
+  /** buy, sell or hold (as the orchestrator emitted it). */
+  action: string;
+  confidence: number;
+  /** Dollar size after the orchestrator's adjustments (critic, floor, scaler). */
+  position_size: number;
+  /** The engine's price for the symbol at decision time; null when it had none. */
+  price?: number | null;
+  executed: boolean;
+  outcome: DecisionOutcome | string;
+  outcome_detail?: string | null;
+  /** Dollar size after the engine's own sizing sequence, when it ran. */
+  resolved_size?: number | null;
+  /** The lot this decision opened, when it did. */
+  position_id?: number | null;
+  reasoning?: string;
+  stop_loss?: number | null;
+  take_profit?: number | null;
+  trail_stop_pct?: number | null;
+  pattern_confidence?: number;
+  agent_consensus?: number;
+  risk_score?: number;
+  ml_p_profit?: number | null;
+  regime_label?: string | null;
+  regime_confidence?: number | null;
+  /** Continuous regime weight in [0, 1]; null means the legacy hard gate was in force. */
+  regime_weight?: number | null;
+  critic_agree?: boolean | null;
+  critic_reason_code?: string | null;
+  critic_parse_failed?: boolean | null;
+  pm_signal?: string | null;
+  mtf_is_choppy?: boolean | null;
+  mtf_trend_score?: number | null;
+}
+
+/**
+ * The typed decision context the orchestrator attached — free-form beyond the
+ * known members. Null for decisions recorded before the context existed.
+ */
+export interface DecisionContext {
+  regime?: Record<string, unknown> | null;
+  signals?: Record<string, unknown> | null;
+  mtf?: Record<string, unknown> | null;
+  critic?: Record<string, unknown> | null;
+  position_manager?: Record<string, unknown> | null;
+  /** Steps (sell_critic, critic_modulate, confidence_floor, size_scale) with fired and size/confidence before/after. */
+  adjustments?: Record<string, unknown>[] | null;
+  [key: string]: unknown;
+}
+
+/**
+ * The full decision path for one decision. `mode` is "paper", "real" or
+ * "backtest"; on a run `trace_files` is empty.
+ */
+export interface DecisionDetail {
+  session_id: string;
+  mode: string;
+  decision: DecisionSummary;
+  context?: DecisionContext | null;
+  /** ML-1 setup features at decision time. */
+  features?: Record<string, number> | null;
+  opened_lots?: OracleLot[];
+  closed_lots?: OracleLot[];
+  fills?: OracleFill[];
+  /** Decision-trace files being written at the time; empty for a backtest. */
+  trace_files?: Record<string, unknown>[];
+}
+
+/** A bounded page of decision records, newest first. */
+export interface DecisionsResponse {
+  session_id: string;
+  mode: string;
+  total_matching: number;
+  limit: number;
+  offset: number;
+  decisions: DecisionSummary[];
+}
+
+/**
+ * Frontend view-model: where a decision lives — a live engine session (oracle
+ * routes) or a backtest run (backtest routes). One component serves both.
+ */
+export type DecisionSource =
+  | { kind: 'session'; sessionId: string }
+  | { kind: 'run'; runId: string };
+
+/**
+ * What a card or marker points at: a decision, or a mechanical exit with no
+ * decision behind it (stop / trail / force-close — open the lot's lineage
+ * instead, headed by `exit_reason`).
+ */
+export type DecisionSelection =
+  | { kind: 'decision'; decisionId: string; summary?: DecisionSummary }
+  | { kind: 'mechanical'; positionId?: number | null; reason?: string | null; symbol?: string };

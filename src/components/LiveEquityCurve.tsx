@@ -12,7 +12,7 @@ export function LiveEquityCurve({ equityCurve, title = 'Live Equity Curve' }: Li
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<import('lightweight-charts').IChartApi | null>(null);
   const seriesRef = useRef<import('lightweight-charts').ISeriesApi<"Area"> | null>(null);
-  const lastPointCountRef = useRef(0);
+  const previousPointsRef = useRef<EquityPoint[]>([]);
 
   // Chart initialization — only once
   useEffect(() => {
@@ -46,7 +46,7 @@ export function LiveEquityCurve({ equityCurve, title = 'Live Equity Curve' }: Li
 
     chartRef.current = chart;
     seriesRef.current = areaSeries;
-    lastPointCountRef.current = 0;
+    previousPointsRef.current = [];
 
     const handleResize = () => {
       if (chartContainerRef.current) {
@@ -65,32 +65,24 @@ export function LiveEquityCurve({ equityCurve, title = 'Live Equity Curve' }: Li
 
   // Update chart data
   useEffect(() => {
-    if (!seriesRef.current || !equityCurve || equityCurve.length === 0) return;
-
-    const sortedHistory = [...equityCurve].sort((a, b) => a.time - b.time);
-    const uniqueHistory = new Map<number, EquityPoint>();
-    sortedHistory.forEach(point => uniqueHistory.set(point.time, point));
-    const chartData = Array.from(uniqueHistory.values());
-
-    if (lastPointCountRef.current === 0) {
-      seriesRef.current.setData(
-        chartData.map(point => ({
-          time: point.time as import('lightweight-charts').Time,
-          value: point.capital,
-        }))
-      );
-      chartRef.current?.timeScale().fitContent();
-    } else if (chartData.length > lastPointCountRef.current) {
-      const newPoints = chartData.slice(lastPointCountRef.current);
-      for (const point of newPoints) {
-        seriesRef.current.update({
-          time: point.time as import('lightweight-charts').Time,
-          value: point.capital,
-        });
+    if (!seriesRef.current) return;
+    const unique = new Map<number, EquityPoint>();
+    for (const point of equityCurve) {
+      if (Number.isFinite(point.time) && Number.isFinite(point.capital)) unique.set(point.time, point);
+    }
+    const data = [...unique.values()].sort((a, b) => a.time - b.time);
+    const previous = previousPointsRef.current;
+    const rebuild = !previous.length || data.length < previous.length || previous.some((point, i) =>
+      data[i]?.time !== point.time || (i < previous.length - 1 && data[i]?.capital !== point.capital));
+    if (rebuild) {
+      seriesRef.current.setData(data.map(point => ({ time: point.time as import('lightweight-charts').Time, value: point.capital })));
+      if (!previous.length && data.length) chartRef.current?.timeScale().fitContent();
+    } else {
+      for (const point of data.slice(Math.max(0, previous.length - 1))) {
+        seriesRef.current.update({ time: point.time as import('lightweight-charts').Time, value: point.capital });
       }
     }
-
-    lastPointCountRef.current = chartData.length;
+    previousPointsRef.current = data;
   }, [equityCurve]);
 
   return (

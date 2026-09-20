@@ -1,3 +1,6 @@
+import { DecisionProvider, DecisionBook } from '../components/DecisionExplorer';
+import { EvaluationCurve } from '../components/EvaluationCurve';
+import { FillHistory } from '../components/FillHistory';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
@@ -94,7 +97,7 @@ function RiskLimitsForm({
   );
 }
 
-export function LiveTradingDashboard() {
+function LiveTradingDashboardContent() {
   const { role } = useRole();
   const isAdmin = role === 'admin';
   const sessionId = DEFAULT_SESSION_ID;
@@ -354,6 +357,8 @@ export function LiveTradingDashboard() {
 
       {/* Equity Curve */}
       <LiveEquityCurve equityCurve={liveData?.equity_curve ?? []} title="Engine Equity Curve" />
+      <EvaluationCurve sessionId={sessionId} />
+      <DecisionBook />
 
       {/* Positions and Fills */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 min-h-[300px]">
@@ -368,9 +373,14 @@ export function LiveTradingDashboard() {
           <h3 className="section-title">Recent Fills</h3>
           <div className="flex-1 overflow-y-auto">
             <RecentFillsFeed fills={liveData?.recent_fills ?? []} currency={liveData?.currency ?? 'USD'} />
+            <FillHistory sessionId={sessionId} currency={liveData?.currency ?? 'USD'} />
           </div>
         </GlassCard>
       </div>
     </div>
   );
+}
+
+export function LiveTradingDashboard() {
+  return <DecisionProvider source={{ kind: 'session', sessionId: DEFAULT_SESSION_ID }}><LiveTradingDashboardContent /></DecisionProvider>;
 }
