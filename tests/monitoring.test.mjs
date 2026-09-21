@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { curvePoints, ledgerCurve, alignedComparison, isStale, measurement, rows } from '../src/utils/monitoring.ts';
-import { fmtPrice, formatMoney, formatPercentage, formatDate } from '../src/utils/trading.ts';
+import { curvePoints, ledgerCurve, alignedComparison, isStale, measurement, rows, fillReturns } from '../src/utils/monitoring.ts';
+import { fmtPrice, formatMoney, formatPercentage, formatDate, formatTradePrice } from '../src/utils/trading.ts';
 
 test('null metrics remain unavailable while measured zero remains zero', () => {
   for (const value of [null, undefined, NaN, Infinity]) {
@@ -52,4 +52,22 @@ test('freshness distinguishes unknown from stale and healthy', () => {
   assert.equal(isStale({ as_of: 'bad', stale_after_seconds: 30 }, now), null);
   assert.equal(isStale({ as_of: '2026-09-21T00:00:00Z', stale_after_seconds: 30 }, now), true);
   assert.equal(isStale({ as_of: '2026-09-21T00:00:45Z', stale_after_seconds: 30 }, now), false);
+});
+
+
+test('realized fill returns preserve gains, losses, zero, and independently missing values', () => {
+  const sell = { side: 'SELL', source: 'engine', realized_pnl: 25, realized_pnl_pct: 4.25 };
+  assert.deepEqual(fillReturns(sell), { pnl: 25, roi: 4.25 });
+  assert.deepEqual(fillReturns({ ...sell, realized_pnl: -12, realized_pnl_pct: -2 }), { pnl: -12, roi: -2 });
+  assert.deepEqual(fillReturns({ ...sell, realized_pnl: 0, realized_pnl_pct: 0 }), { pnl: 0, roi: 0 });
+  assert.deepEqual(fillReturns({ ...sell, realized_pnl: null }), { pnl: null, roi: 4.25 });
+  assert.deepEqual(fillReturns({ ...sell, realized_pnl_pct: null }), { pnl: 25, roi: null });
+  assert.deepEqual(fillReturns({ ...sell, side: 'BUY' }), { pnl: null, roi: null });
+  assert.deepEqual(fillReturns({ ...sell, source: 'exchange' }), { pnl: null, roi: null });
+});
+
+test('small trade prices retain their precision and explicit currency', () => {
+  assert.equal(formatTradePrice(.00042, 'EUR'), '€0.000420');
+  assert.equal(formatTradePrice(0, 'USD'), '$0.00');
+  assert.equal(formatTradePrice(null, 'USD'), '—');
 });

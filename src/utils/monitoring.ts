@@ -36,3 +36,13 @@ export function alignedComparison(equity?: CurvePoint[] | null, benchmark?: Curv
   if (!book.length || !other.length || book.at(-1)?.time !== other.at(-1)?.time) return null;
   return { benchmark: other.at(-1)!.value, difference: book.at(-1)!.value - other.at(-1)!.value };
 }
+
+// BUY P&L can represent only an entry fee; venue-history fills do not establish
+// a strategy cost basis. Neither should appear as a realized strategy return.
+export function fillReturns(fill: import('../types/api').LiveFill) {
+  const eligible = fill.side === 'SELL' && fill.source !== 'exchange';
+  return {
+    pnl: eligible && measured(fill.realized_pnl) ? fill.realized_pnl : null,
+    roi: eligible && measured(fill.realized_pnl_pct) ? fill.realized_pnl_pct : null,
+  };
+}

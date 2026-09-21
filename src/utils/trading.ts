@@ -43,3 +43,14 @@ export function formatDate(timestamp: number | string | null | undefined): strin
   const date = typeof timestamp === 'string' ? new Date(timestamp) : new Date(timestamp * 1000);
   return Number.isFinite(date.getTime()) ? date.toLocaleString() : 'Not recorded';
 }
+
+// Trade prices need sub-cent precision; portfolio totals remain two decimals.
+export function formatTradePrice(value: number | null | undefined, currency = 'USD') {
+  if (value == null || !Number.isFinite(value)) return '—';
+  return `${currencySymbol(currency)}${fmtPrice(value)}`;
+}
+
+export function formatSignedMoney(value: number | null | undefined, currency = 'USD') {
+  if (value == null || !Number.isFinite(value)) return '—';
+  return `${value >= 0 ? '+' : ''}${formatMoney(value, currency)}`;
+}

@@ -62,6 +62,7 @@ function DecisionPathDrawer({ source, selection, onClose, onSelect, inline = fal
         <h3>{decision.symbol} · {humanize(decision.action)}</h3><span className="fill-status">{humanize(decision.outcome)}</span>
         <p>{formatDate(decision.decided_at)} · engine decision time</p>
         <p>{decision.reasoning}</p>
+        <details><summary>Decision metrics & signals</summary><Fields value={decision} /></details>
         {!data.context ? <p>No path recorded</p> : <ol className="decision-timeline">
           {['regime', 'signals', 'mtf', 'critic', 'position_manager'].map(key => <li key={key}><details><summary>{humanize(key)}</summary><Fields value={data.context?.[key]} /></details></li>)}
           <li><h3>Adjustments</h3>{data.context.adjustments?.length ? rows(data.context.adjustments).map((step, i) => <Fields key={i} value={step} />) : <p>No adjustments recorded</p>}</li>

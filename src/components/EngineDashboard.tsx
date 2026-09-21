@@ -4,7 +4,7 @@ import { FiSettings, FiSquare } from 'react-icons/fi';
 import { api, ApiError } from '../services/api';
 import { useRole } from '../contexts/RoleContext';
 import type { EngineControls, EngineMode, EngineStatus, LiveEngineDetail } from '../types/api';
-import { formatDate, formatMoney, formatPercentage } from '../utils/trading';
+import { formatDate, formatMoney, formatPercentage, formatSignedMoney } from '../utils/trading';
 import { measured, measurement } from '../utils/monitoring';
 import { DecisionProvider } from './DecisionExplorer';
 import { LiveTradingWorkspace } from './LiveTradingWorkspace';
@@ -47,7 +47,7 @@ function AccountDetails({ sessionId, data }: { sessionId: string; data?: LiveEng
   return <details className="workspace-controls"><summary>Exchange account & reconciliation</summary>
     {query.isPending && <p>Loading account…</p>}{query.error && <p role="alert">{query.error.message}</p>}
     {!query.isPending && !query.error && !account && <p>Account snapshot unavailable. This does not mean the account is empty.</p>}
-    {account && <><dl className="telemetry-stats"><div><dt>Quote cash</dt><dd>{formatMoney(account.quote_cash, currency)}</dd></div><div><dt>Holdings value</dt><dd>{formatMoney(account.positions_value, currency)}</dd></div><div><dt>Exchange total</dt><dd>{formatMoney(account.total_value, currency)}</dd></div><div><dt>Ledger total</dt><dd>{formatMoney(data?.portfolio_value, data?.currency)}</dd></div><div><dt>Balance difference</dt><dd>{formatMoney(drift, currency)}</dd></div><div><dt>Exchange holdings</dt><dd>{account.num_holdings ?? '—'}</dd></div></dl><p className="widget-note">{stale ? 'Stale · ' : ''}Last read: {formatDate(account.as_of)}</p><p className="widget-note">Holdings can include dust and bonded balances outside managed lots. Balance difference compares independently sampled totals; it is not an engine reconciliation verdict.</p></>}
+    {account && <><dl className="telemetry-stats"><div><dt>Quote cash</dt><dd>{formatMoney(account.quote_cash, currency)}</dd></div><div><dt>Holdings value</dt><dd>{formatMoney(account.positions_value, currency)}</dd></div><div><dt>Exchange total</dt><dd>{formatMoney(account.total_value, currency)}</dd></div><div><dt>Ledger total</dt><dd>{formatMoney(data?.portfolio_value, data?.currency)}</dd></div><div><dt>Balance difference</dt><dd>{formatMoney(drift, currency)}</dd></div><div><dt>Exchange holdings</dt><dd>{account.num_holdings ?? '—'}</dd></div><div><dt>Managed positions</dt><dd>{data?.open_positions_count ?? '—'}</dd></div></dl><p className="widget-note">{stale ? 'Stale · ' : ''}Last read: {formatDate(account.as_of)}</p><p className="widget-note">Holdings can include dust and bonded balances outside managed lots. Balance difference compares independently sampled totals; it is not an engine reconciliation verdict.</p></>}
   </details>;
 }
 
@@ -66,7 +66,7 @@ function Dashboard({ sessionId, mode }: { sessionId: string; mode: EngineMode })
   const currency = data?.currency ?? 'USD';
   const metrics = [
     ['Portfolio value', formatMoney(data?.portfolio_value, currency)],
-    ['P&L return', formatPercentage(data?.pnl_pct)],
+    ['P&L', formatSignedMoney(data?.pnl, currency)],
     ['Max drawdown', formatPercentage(data?.drawdown_pct)],
     ['Exposure', measured(data?.exposure_pct) ? `${measurement(data.exposure_pct)}%` : '—'],
     ['Open positions', measured(data?.open_positions_count) ? String(data.open_positions_count) : '—'],
@@ -79,8 +79,8 @@ function Dashboard({ sessionId, mode }: { sessionId: string; mode: EngineMode })
     {command.error && <p className="monitor-error" role="alert">{command.error.message}</p>}{command.isSuccess && <p className="widget-note" role="status">{command.variables === 'halt' ? 'Halt' : 'Resume'} requested. Awaiting engine status confirmation.</p>}
     {(statusQuery.error || detailQuery.error) && <p className="monitor-error" role="alert">{statusQuery.error?.message ?? detailQuery.error?.message} · Previously loaded data may be stale.</p>}
     {!status && !statusQuery.isPending && !statusQuery.error && <p className="widget-note">No engine status available yet. The workspace will update when the session reports data.</p>}
-    <div className="portfolio-strip" aria-label="Portfolio summary">{metrics.map(([label, value]) => <div key={label}><span>{label}</span><strong className={label === 'P&L return' && measured(data?.pnl_pct) ? data.pnl_pct >= 0 ? 'text-positive' : 'text-negative' : ''}>{value}</strong></div>)}</div>
-    <LiveTradingWorkspace sessionId={sessionId} mode={mode} status={statusQuery.error ? null : status} data={data} dataError={detailQuery.error?.message} currency={currency} settings={<details ref={settings} className="workspace-controls"><summary><FiSettings />Engine settings</summary>{isAdmin ? <RiskSettings key={`${sessionId}-${status?.max_position_size_pct}-${status?.max_daily_loss_pct}-${status?.max_open_positions}`} sessionId={sessionId} status={status} mode={mode} /> : <p className="widget-note">Engine settings are available to operators.</p>}</details>} account={mode === 'real' && isAdmin ? <AccountDetails sessionId={sessionId} data={data} /> : undefined} />
+    <div className="portfolio-strip" aria-label="Portfolio summary">{metrics.map(([label, value]) => <div key={label}><span>{label}</span><strong className={label === 'P&L' && measured(data?.pnl) ? data.pnl >= 0 ? 'text-positive' : 'text-negative' : ''}>{value}</strong>{label === 'P&L' && <small className={measured(data?.pnl_pct) ? data.pnl_pct >= 0 ? 'text-positive' : 'text-negative' : ''}>ROI {formatPercentage(data?.pnl_pct)}</small>}</div>)}</div>
+    <LiveTradingWorkspace sessionId={sessionId} mode={mode} status={statusQuery.error ? null : status} data={data} dataError={detailQuery.error?.message} currency={currency} settings={<details ref={settings} className="workspace-controls"><summary><FiSettings />Engine settings</summary>{isAdmin ? <RiskSettings key={`${sessionId}-${status?.max_position_size_pct}-${status?.max_daily_loss_pct}-${status?.max_open_positions}`} sessionId={sessionId} status={status} mode={mode} /> : <dl className="telemetry-stats" aria-label="Risk limits"><div><dt>Maximum position</dt><dd>{measured(status?.max_position_size_pct) ? measurement(status.max_position_size_pct * 100, '%') : '—'}</dd></div><div><dt>Daily loss limit</dt><dd>{measured(status?.max_daily_loss_pct) ? measurement(status.max_daily_loss_pct * 100, '%') : '—'}</dd></div><div><dt>Maximum positions</dt><dd>{status?.max_open_positions ?? '—'}</dd></div></dl>}</details>} account={mode === 'real' && isAdmin ? <AccountDetails sessionId={sessionId} data={data} /> : undefined} />
   </div>;
 }
 

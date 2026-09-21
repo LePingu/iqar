@@ -385,3 +385,10 @@
 @media (min-width: 1101px) { .details-content { max-height: 650px; overflow-y: auto; padding-right: 3px; } }
 @media (min-width: 769px) { .sidebar { width: 192px; } }
 @media (max-width: 640px) { .trading-inspector { align-items: stretch; } }
+.portfolio-strip small { display: block; margin-top: 5px; font-size: 11px; font-variant-numeric: tabular-nums; }
+.fills-table th, .fills-table td { padding-inline: 9px; }
+.fills-table td.fill-date, .fills-table td .fill-date, .fills-table td .fill-settlement { color: #8b99a8; font-size: 9px; }
+.fills-table td.metric-unknown { color: #8b99a8; }
+.fill-return-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0; }
+.fill-return-summary dt { font-size: 10px; color: #91a0af; }
+.fill-return-summary dd { margin-top: 4px; font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }

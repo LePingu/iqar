@@ -1,11 +1,15 @@
 openapi: 3.0.3
 info:
   title: Trader-Strat API
-  version: 1.0.0
+  version: 1.1.0-draft-live-monitor
   description: |
     API specification for the Trader-Strat Control Tower.
     Provides REST endpoints for backtest management and system control, 
     plus WebSocket documentation for live trading streams.
+
+    Live-monitor additions marked `x-implementation-status: requested` are the
+    additive contract proposed by the frontend. They are deliberately not a
+    claim that a currently deployed Tower serves those routes yet.
 
 tags:
   - name: System
@@ -16,6 +20,8 @@ tags:
     description: Backtest execution and historical review
   - name: Engine
     description: Live trading engine control (halt / resume / risk limits)
+  - name: Live Monitor
+    description: Read-only telemetry, structured audit events and execution evidence for live engine sessions
   - name: Oracle
     description: Read-only lineage for agents and service tokens (lots, fills, traces, logs); every read is audited
 
@@ -23,7 +29,7 @@ paths:
   /api/engine/{session_id}/telemetry:
     get:
       tags:
-        - Engine
+        - Live Monitor
       summary: Read component health and active incidents
       x-implementation-status: requested
       description: >-
@@ -37,11 +43,32 @@ paths:
             type: string
       responses:
         '200':
-          description: Stored observation; null is unavailable, never zero or healthy.
+          description: |
+            Stored observation for exactly this session. Component values may be
+            null when not measured; a 200 response must never invent a healthy
+            state. `as_of` is the measurement time, not request time.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/EngineTelemetry'
+              examples:
+                critic_fallback:
+                  summary: Critic degraded while the engine keeps using its configured fallback
+                  value:
+                    session_id: live-real
+                    mode: real
+                    as_of: '2026-09-21T06:32:08Z'
+                    generated_at: '2026-09-21T06:32:09Z'
+                    snapshot_id: engine-cycle-123
+                    stale_after_seconds: 60
+                    components:
+                      engine: { state: healthy, label: Online, as_of: '2026-09-21T06:32:08Z', stale_after_seconds: 60 }
+                      market_data: { state: healthy, label: Fresh, as_of: '2026-09-21T06:32:08Z', stale_after_seconds: 30 }
+                      exchange: { state: healthy, label: Connected, as_of: '2026-09-21T06:32:07Z', stale_after_seconds: 60 }
+                      critic: { state: degraded, label: Fallback, reason: Critic timeout; configured fallback active }
+                    last_cycle_at: '2026-09-21T06:32:08Z'
+                    cycle_duration_ms: 840
+                    active_event_count: 1
         '204':
           description: No observation available
         '401':
@@ -57,7 +84,7 @@ paths:
   /api/engine/{session_id}/events:
     get:
       tags:
-        - Engine
+        - Live Monitor
       summary: Read structured audit events with stable cursor
       x-implementation-status: requested
       description: >-
@@ -71,6 +98,7 @@ paths:
             type: string
         - in: query
           name: limit
+          description: Maximum rows returned. The server returns newest first.
           schema:
             type: integer
             minimum: 1
@@ -78,11 +106,15 @@ paths:
             default: 50
         - in: query
           name: cursor
+          description: Opaque exclusive cursor returned by the preceding response. Do not construct or decode it.
           schema:
             type: string
       responses:
         '200':
-          description: Stored observation; null is unavailable, never zero or healthy.
+          description: |
+            Stable newest-first page. `events: []` is a successful read with no
+            matching events. `events: null` is unavailable during rollout and
+            must not be treated as an empty audit history.
           content:
             application/json:
               schema:
@@ -102,7 +134,7 @@ paths:
   /api/engine/{session_id}/orders/{order_id}:
     get:
       tags:
-        - Engine
+        - Live Monitor
       summary: Read order execution lifecycle and quality
       x-implementation-status: requested
       description: >-
@@ -121,7 +153,9 @@ paths:
             type: string
       responses:
         '200':
-          description: Stored observation; null is unavailable, never zero or healthy.
+          description: |
+            One order scoped to this session. Event stages are observed lifecycle
+            evidence; absent stages are unknown and must never be synthesized.
           content:
             application/json:
               schema:
@@ -2421,6 +2455,17 @@ components:
         commission:
           type: number
           nullable: true
+          description: |
+            Commission charged for this fill. `commission_currency` identifies
+            the denomination when known. A numeric commission without that field
+            is retained for compatibility but its currency is not implied.
+        commission_currency:
+          type: string
+          nullable: true
+          description: |
+            ISO currency code for `commission`; null when legacy storage did not
+            retain the denomination. This is not inferred from the book currency.
+          x-implementation-status: requested
     PaginatedLiveFills:
       type: object
       description: |
@@ -2891,6 +2936,10 @@ components:
         return_method:
           type: string
           nullable: true
+          description: |
+            Server-defined performance method, for example `time_weighted` or
+            `ledger_change`. Null means the frontend must not label the curve as
+            a cash-flow-adjusted return.
           x-implementation-status: requested
         net_of_fees:
           type: boolean
@@ -3475,6 +3524,7 @@ components:
             reason:
               type: string
               nullable: true
+      required: [session_id, mode]
       x-implementation-status: requested
     AuditEventsResponse:
       type: object
@@ -3505,6 +3555,7 @@ components:
         active_count:
           type: integer
           nullable: true
+          description: Session-wide unresolved-event count; it can exceed the page length.
       x-implementation-status: requested
     ExecutionQuality:
       type: object
@@ -3527,6 +3578,7 @@ components:
         fees:
           type: number
           nullable: true
+          description: Fees scoped to this execution-quality record, not necessarily one fill.
         fee_currency:
           type: string
           nullable: true
@@ -3575,9 +3627,11 @@ components:
         status:
           type: string
           nullable: true
+          enum: [pending, submitted, acknowledged, partially_filled, filled, cancelled, rejected, expired]
         trigger_type:
           type: string
           nullable: true
+          description: Engine reason for this order, such as signal, hard_stop, trailing_stop or force_close.
         requested_quantity:
           type: number
           nullable: true
@@ -3609,12 +3663,14 @@ components:
         allocation_pct:
           type: number
           nullable: true
+          description: Portfolio allocation in percentage points; 12.5 means 12.5%.
         effective_stop_price:
           type: number
           nullable: true
         stop_distance_pct:
           type: number
           nullable: true
+          description: Current mark-to-effective-stop distance in percentage points.
         free_quantity:
           type: number
           nullable: true
@@ -3627,6 +3683,10 @@ components:
         executable:
           type: boolean
           nullable: true
+          description: |
+            Whether the engine can currently execute this protection. Null means
+            it has not measured executability; false may reflect bonded or
+            otherwise unavailable inventory.
         reason:
           type: string
           nullable: true

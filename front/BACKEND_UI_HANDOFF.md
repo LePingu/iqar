@@ -3,7 +3,10 @@
 Status: **requested additive contract**, not a claim these backend capabilities
 are deployed. The frontend consumes the resources below opportunistically. This
 repository implements the UI, not the Python/Rust engine. `openapi.yaml` marks
-new routes/schemas with `x-implementation-status: requested`.
+new routes/schemas with `x-implementation-status: requested`. Treat
+[`openapi.yaml`](openapi.yaml) as the authoritative machine-readable backend
+contract (version `1.1.0-draft-live-monitor`); this document supplies the
+operational semantics and rollout guidance behind it.
 
 Approved visual: [live trading monitor](mockups/live-trading-approved.png).
 The screenshot contains illustrative data; do not seed it into production.
@@ -26,8 +29,10 @@ The screenshot contains illustrative data; do not seed it into production.
 All new fields are optional AND nullable. `null` / absent means unavailable,
 never zero, false, healthy, protected, filled, or an empty account. An empty list
 means a successful read with no rows; a null list means not measured/available.
-The frontend accepts 200 null or 204 for unavailable new resources. During rollout,
-404 or 501 on telemetry/events/order-detail also becomes an unavailable state.
+For audit events specifically, `events: []` is an empty successful result while
+`events: null` signals unavailable data. The frontend accepts a nullable 200 body
+or 204 for unavailable new resources. During rollout, 404 or 501 on
+telemetry/events/order-detail also becomes an unavailable state.
 401/403, 5xx and network failures remain visible errors; they must not look healthy.
 Existing mandatory routes keep their error semantics.
 
@@ -131,10 +136,12 @@ Fees should come from venue records with documented conversion, not guessed rate
 
 ## Additions to existing payloads
 
-1. `LiveFill`: `order_id`, `execution_quality`. Feed/history quality is scoped to
-   the fill; order-detail quality is explicitly the whole order. Existing
-   commission and settlement/FX fields remain intact. A fill does not imply its
-   whole order completed.
+1. `LiveFill`: `order_id`, `execution_quality`, `commission_currency`. Feed/history
+   quality is scoped to the fill; order-detail quality is explicitly the whole
+   order. `commission_currency` is the ISO denomination of a numeric commission;
+   when null, clients must not infer it from the book currency. Existing commission
+   and settlement/FX fields remain intact. A fill does not imply its whole order
+   completed.
 2. `FillMarkerModel`: `order_id`, `fill_id` linking chart clicks to execution.
    Existing decision/lot links continue to work without them.
 3. `OpenPosition`: `position_id`, `protection` (`PositionProtection` schema):

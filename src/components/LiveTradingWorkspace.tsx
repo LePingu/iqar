@@ -30,6 +30,7 @@ function TelemetryWidget({ sessionId, status, mode, onAudit }: { sessionId: stri
   return <section className="telemetry-widget" aria-label="Telemetry and audit">
     <div className="widget-heading"><h3>Telemetry & audit</h3></div>
     <div className="component-health"><Health label="Engine" value={engine} failed={failed} /><Health label="Market data" value={components?.market_data} failed={failed} /><Health label="Exchange" value={components?.exchange} failed={failed} /><Health label="Critic" value={components?.critic} failed={failed} /></div>
+    <p className="widget-note">Last heartbeat: {formatDate(status?.last_snapshot_ts)}</p>
     <p className="widget-note">Last cycle: {formatDate(data?.last_cycle_at)} · {measurement(data?.cycle_duration_ms, ' ms', 0)}</p>
     {telemetry.error && <p className="monitor-error" role="alert">{telemetry.error.message}</p>}{mismatch && <p role="alert">Telemetry belongs to a different book.</p>}{isStale(data) && <p className="widget-note">Telemetry is stale.</p>}
     {rows(data?.incidents).slice(0, 2).map(event => <button key={event.id} className={`incident-strip ${event.severity === 'critical' ? 'critical' : ''}`} onClick={() => context?.select({ kind: 'event', event })}><FiAlertCircle /><span>{event.title ?? event.detail ?? 'Event details unavailable'}</span><span>›</span></button>)}

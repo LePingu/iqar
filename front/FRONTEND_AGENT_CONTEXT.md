@@ -264,6 +264,41 @@ endpoints for the engine):
   operator can check against their Kraken statement, and the only one that will
   match it.
 
+### Live monitor metric preservation
+
+The approved redesign changes layout and chart axes; it does not remove financial
+or operational measurements. Recent-fill requirements also apply to the paged
+fill-history table, which uses the same row model.
+
+| Metric | Required location in the redesigned UI |
+| --- | --- |
+| Portfolio value | Portfolio summary, in accounting currency |
+| Monetary P&L and ROI % | P&L summary with ROI underneath; display both |
+| Maximum drawdown and open-position count | Portfolio summary |
+| Fill realized P&L and ROI % | Separate visible values in recent/history rows and selected-fill summary |
+| Fill quantity and price | Visible table columns; retain small-price precision |
+| Fill commission | Visible column and fill details; do not assume a legacy commission's currency |
+| Fill timestamp | Time and date in the table; full timestamp in the inspector |
+| Native price, settlement currency, conversion rate and venue pair | Price-cell secondary line and fill details; label unconverted rows |
+| Fill side, source and reason | Table and inspector |
+| Position quantity, entry/current price, unrealised P&L % and trailing status | Open-positions table |
+| FIFO lot count, aggregate quantity, basis and adoption date | Position groups/badges and inspector |
+| Trailing-stop price | Position inspector, separate from the effective protection stop |
+| Maximum position %, daily loss % and maximum slots | Engine settings; editable for operators and visible to readers |
+| Engine heartbeat | Telemetry widget, separately from engine-cycle time |
+| Exchange cash, holdings value, total and holdings count | Exchange-account disclosure |
+| Ledger total, exchange/ledger difference, managed-position count and account-read time | Exchange-account disclosure; retain stale indication |
+| Decision confidence, regime weight, ML probability, critic/MTF values and requested/resolved size | Decision cards and the metrics/signals disclosure, even if context is null |
+| Historical equity | The one percentage chart; current monetary balance remains in the summary |
+
+ROI comes from `realized_pnl_pct`; do not calculate it in the browser or confuse
+it with portfolio ROI. SELL engine fills display monetary return and ROI
+independently. Null is `—`; measured zero remains `+$0.00` / `+0.00%`. BUY rows
+do not show an entry fee as realized return, and exchange-history fills never gain
+invented strategy P&L. Preserve legacy commission when execution-quality data is
+unavailable; fill-level and whole-order fees are distinct. Exchange-versus-ledger
+subtraction is an independently sampled comparison, not a reconciliation verdict.
+
 **When engine_alive=false**: show the control panel in a degraded state (grey badge, disabled Halt/Resume, stale KPIs greyed out). Do NOT redirect — the user needs to stay on this page to see the engine is down and to send a command when it comes back.
 
 **When the engine has never started** (no session row): show a single `EngineNotStarted` banner with the launch command:
