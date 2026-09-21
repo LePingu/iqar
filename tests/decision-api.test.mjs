@@ -67,11 +67,25 @@ test('optional monitor reads retain auth and operational failures', async () => 
   }
 });
 
-test('event cursor and order identities are encoded without changing scope', async () => {
+test('event filters, cursor and order identities are encoded without changing scope', async () => {
   const urls = capture();
-  await api.getEngineEvents('live/real', 'cursor/a+b=');
+  await api.getEngineEvents('live/real', { cursor: 'cursor/a+b=', category: 'critic_degraded', severity: 'warning', active: true });
   await api.getOrderExecution('live/real', 'order/#1');
   assert.equal(urls[0].pathname, '/api/engine/live%2Freal/events');
   assert.equal(urls[0].searchParams.get('cursor'), 'cursor/a+b=');
+  assert.equal(urls[0].searchParams.get('category'), 'critic_degraded');
+  assert.equal(urls[0].searchParams.get('severity'), 'warning');
+  assert.equal(urls[0].searchParams.get('active'), 'true');
   assert.equal(urls[1].pathname, '/api/engine/live%2Freal/orders/order%2F%231');
+});
+
+test('peer reads preserve the feature-gated routes and run identity', async () => {
+  const urls = capture([]);
+  await api.getPeers();
+  await api.getPeer('freqtrade/ema');
+  await api.getPeerField('bull-2023-10', 'run/a');
+  assert.equal(urls[0].pathname, '/api/peers');
+  assert.equal(urls[1].pathname, '/api/peers/freqtrade%2Fema');
+  assert.equal(urls[2].pathname, '/api/peers/field/bull-2023-10');
+  assert.equal(urls[2].searchParams.get('our_run_id'), 'run/a');
 });

@@ -21,14 +21,15 @@ test('null metrics remain unavailable while measured zero remains zero', () => {
 test('curve conversion sorts, deduplicates and rejects missing measurements', () => {
   const result = curvePoints([
     null,
-    { timestamp: '2026-09-21T01:00:00Z', index: 105, value: 105000 },
-    { timestamp: 'bad date', index: 150, value: 150000 },
-    { timestamp: '2026-09-21T02:00:00Z', index: null, value: 120000 },
-    { timestamp: '2026-09-21T00:00:00Z', index: 100, value: 100000 },
-    { timestamp: '2026-09-21T01:00:00Z', index: 104, value: 104000 },
+    { timestamp: '2026-09-21T01:00:00Z', index: 105, value: 105000, rebased: 10500 },
+    { timestamp: 'bad date', index: 150, value: 150000, rebased: 15000 },
+    { timestamp: '2026-09-21T02:00:00Z', index: null, value: 120000, rebased: 12000 },
+    { timestamp: '2026-09-21T00:00:00Z', index: 100, value: 100000, rebased: 10000 },
+    { timestamp: '2026-09-21T01:00:00Z', index: 104, value: 104000, rebased: 10400 },
   ]);
-  assert.deepEqual(result.map(p => p.value), [100000, 104000]);
+  assert.deepEqual(result.map(p => p.value), [0, 4]);
   assert.deepEqual(result.map(p => p.returnPct), [0, 4]);
+  assert.deepEqual(curvePoints([{ timestamp: '2026-09-21T00:00:00Z', index: 100, value: 100000, rebased: 10000 }], 'dollars').map(p => p.value), [10000]);
   assert.ok(result[0].time < result[1].time);
   assert.deepEqual(curvePoints(null), []);
 });

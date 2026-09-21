@@ -1,15 +1,17 @@
 openapi: 3.0.3
 info:
   title: Trader-Strat API
-  version: 1.1.0-draft-live-monitor
+  version: 1.1.0-live-monitor
   description: |
     API specification for the Trader-Strat Control Tower.
     Provides REST endpoints for backtest management and system control, 
     plus WebSocket documentation for live trading streams.
 
-    Live-monitor additions marked `x-implementation-status: requested` are the
-    additive contract proposed by the frontend. They are deliberately not a
-    claim that a currently deployed Tower serves those routes yet.
+    Live-monitor additions (requested by the frontend on 2026-09-21) are
+    marked `x-implementation-status: implemented`: the backend at or after
+    the deploy carrying migrations c8e1f3a5b246 + d9f2a4c6e357 serves them.
+    An older Tower answers 404 on the new routes and omits the new fields —
+    the rollout rules in BACKEND_UI_HANDOFF.md still apply to that case.
 
 tags:
   - name: System
@@ -31,10 +33,11 @@ paths:
       tags:
         - Live Monitor
       summary: Read component health and active incidents
-      x-implementation-status: requested
+      x-implementation-status: implemented
       description: >-
-        Requested 2026-09-21, not guaranteed deployed. Read-only for Access viewers. See BACKEND_UI_HANDOFF.md.
-        404/501 mean unavailable during rollout; auth/service errors remain errors.
+        Implemented 2026-09-21. Read-only for Access viewers. See BACKEND_UI_HANDOFF.md.
+        On a Tower older than this contract the route is 404 (unavailable), never a healthy default;
+        auth/service errors remain errors.
       parameters:
         - in: path
           name: session_id
@@ -86,10 +89,11 @@ paths:
       tags:
         - Live Monitor
       summary: Read structured audit events with stable cursor
-      x-implementation-status: requested
+      x-implementation-status: implemented
       description: >-
-        Requested 2026-09-21, not guaranteed deployed. Read-only for Access viewers. See BACKEND_UI_HANDOFF.md.
-        404/501 mean unavailable during rollout; auth/service errors remain errors.
+        Implemented 2026-09-21. Read-only for Access viewers. See BACKEND_UI_HANDOFF.md.
+        On a Tower older than this contract the route is 404 (unavailable), never a healthy default;
+        auth/service errors remain errors.
       parameters:
         - in: path
           name: session_id
@@ -109,6 +113,21 @@ paths:
           description: Opaque exclusive cursor returned by the preceding response. Do not construct or decode it.
           schema:
             type: string
+        - in: query
+          name: category
+          description: Only events of this category (lifecycle | feed | critic | reconciliation | order | control | exchange).
+          schema:
+            type: string
+        - in: query
+          name: severity
+          description: Only events of this severity (info | warning | critical).
+          schema:
+            type: string
+        - in: query
+          name: active
+          description: true = unresolved incidents only (the rows `active_count` counts).
+          schema:
+            type: boolean
       responses:
         '200':
           description: |
@@ -136,10 +155,11 @@ paths:
       tags:
         - Live Monitor
       summary: Read order execution lifecycle and quality
-      x-implementation-status: requested
+      x-implementation-status: implemented
       description: >-
-        Requested 2026-09-21, not guaranteed deployed. Read-only for Access viewers. See BACKEND_UI_HANDOFF.md.
-        404/501 mean unavailable during rollout; auth/service errors remain errors.
+        Implemented 2026-09-21. Read-only for Access viewers. See BACKEND_UI_HANDOFF.md.
+        On a Tower older than this contract the route is 404 (unavailable), never a healthy default;
+        auth/service errors remain errors.
       parameters:
         - in: path
           name: session_id
@@ -1136,6 +1156,90 @@ paths:
         '404':
           description: No such report
 
+  # ── Peers: external bot comparison, docs/analysis/PEER_BOT_COMPARISON.md ─
+  # Implemented 2026-09-21 and validated on real Freqtrade + NautilusTrader
+  # output (replay mode). Behind PEER_COMPARISON_ENABLED (default off): every
+  # route below 404s on a deployment that hasn't set it — render that as
+  # "unavailable", never as "no peers". Live-shadow rows appear only once
+  # docker-compose.peers.yml's collector runs (peers/README.md).
+  /api/peers:
+    get:
+      tags:
+        - Peers
+      summary: Every peer's latest stored scorecard
+      description: |
+        One row per `(bot, strategy)` defined in `src.peers.registry` — a peer
+        never scored yet is simply absent, never a placeholder row. A live
+        -shadow peer's row is whichever poll was most recent.
+      x-implementation-status: implemented
+      responses:
+        '200':
+          description: Latest scorecards
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PeerScorecardSummary'
+        '404':
+          description: PEER_COMPARISON_ENABLED is not set on this deployment
+
+  /api/peers/{peer_name}:
+    get:
+      tags:
+        - Peers
+      summary: One peer's latest full scorecard
+      x-implementation-status: implemented
+      parameters:
+        - in: path
+          name: peer_name
+          required: true
+          schema:
+            type: string
+          example: freqtrade-ema-cross
+      responses:
+        '200':
+          description: The scorecard
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeerScorecardResponse'
+        '404':
+          description: No scorecard stored yet for this peer
+
+  /api/peers/field/{window_label}:
+    get:
+      tags:
+        - Peers
+      summary: Every peer scored on one named window, ranked
+      description: |
+        The peer field for `window_label` (e.g. `sideways-2023-06`,
+        `bull-2023-10` — `src.peers.windows`), each peer's scorecard plus its
+        rank among the others on capture ratio, return and max drawdown.
+        `our_run_id` optionally places one of our own backtest runs on the
+        same field, scored through the identical function.
+      x-implementation-status: implemented
+      parameters:
+        - in: path
+          name: window_label
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: our_run_id
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The peer field (possibly empty — a window nobody has run yet)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeerField'
+        '404':
+          description: our_run_id does not exist
+
   # ── Oracle: read-only lineage for machine identities ────────────────────
   /api/oracle/sessions:
     get:
@@ -1603,25 +1707,25 @@ components:
           type: string
           nullable: true
           format: date-time
-          x-implementation-status: requested
+          x-implementation-status: implemented
         generated_at:
           type: string
           nullable: true
           format: date-time
-          x-implementation-status: requested
+          x-implementation-status: implemented
         snapshot_id:
           type: string
           nullable: true
-          x-implementation-status: requested
+          x-implementation-status: implemented
         stale_after_seconds:
           type: number
           nullable: true
-          x-implementation-status: requested
+          x-implementation-status: implemented
         exposure_pct:
           type: number
           nullable: true
           description: Percent of portfolio exposed; 12.5 means 12.5%, null is unknown.
-          x-implementation-status: requested
+          x-implementation-status: implemented
         mode:
           type: string
           enum: [paper, real]
@@ -2227,12 +2331,12 @@ components:
         position_id:
           type: integer
           nullable: true
-          x-implementation-status: requested
+          x-implementation-status: implemented
         protection:
           allOf:
             - $ref: '#/components/schemas/PositionProtection'
           nullable: true
-          x-implementation-status: requested
+          x-implementation-status: implemented
         basis_source:
           type: string
           enum: [traded, adopted, reconstructed]
@@ -2362,12 +2466,12 @@ components:
         order_id:
           type: string
           nullable: true
-          x-implementation-status: requested
+          x-implementation-status: implemented
         execution_quality:
           allOf:
             - $ref: '#/components/schemas/ExecutionQuality'
           nullable: true
-          x-implementation-status: requested
+          x-implementation-status: implemented
         source:
           type: string
           enum: [engine, exchange]
@@ -2465,7 +2569,7 @@ components:
           description: |
             ISO currency code for `commission`; null when legacy storage did not
             retain the denomination. This is not inferred from the book currency.
-          x-implementation-status: requested
+          x-implementation-status: implemented
     PaginatedLiveFills:
       type: object
       description: |
@@ -2688,6 +2792,239 @@ components:
             participation, exit-path forward returns, and the invariant checks.
       required: [id, session_id, mode, trigger, generated_at, window_start, window_end, checks_failed, digest]
 
+    # ── Peers (external bot comparison; see /api/peers/*) ──────────────────
+    # x-implementation-status: implemented (behind PEER_COMPARISON_ENABLED) — see the paths above.
+    PeerScorecardSummary:
+      type: object
+      description: |
+        One stored peer Scorecard — headline figures only, the same shape
+        EvaluationSummary is to EvaluationReportResponse. Every numeric field
+        is nullable for the identical reason: a peer whose benchmark could
+        not be priced still produced a real run, just not a capture ratio.
+        Never render null as 0.
+      properties:
+        id:
+          type: integer
+        peer_name:
+          type: string
+          description: '`<bot>-<strategy>` — the identity a chart legend uses, e.g. freqtrade-ema-cross.'
+        bot:
+          type: string
+          enum: [freqtrade, nautilus, jesse]
+        strategy:
+          type: string
+        mode:
+          type: string
+          enum: [replay, live]
+          description: replay = batch on historical bars; live = dry-run shadow, continuously polled.
+        window_label:
+          type: string
+          description: 'e.g. sideways-2023-06, bull-2023-10, live-shadow (src.peers.windows).'
+        generated_at:
+          type: string
+          format: date-time
+        window_start:
+          type: string
+          format: date-time
+        window_end:
+          type: string
+          format: date-time
+        return_pct:
+          type: number
+          nullable: true
+        benchmark_pct:
+          type: number
+          nullable: true
+        capture_ratio:
+          type: number
+          nullable: true
+        alpha_pp:
+          type: number
+          nullable: true
+        sharpe_ratio:
+          type: number
+          nullable: true
+        max_drawdown_pct:
+          type: number
+          nullable: true
+        total_trades:
+          type: integer
+          nullable: true
+        bars_hash:
+          type: string
+          nullable: true
+          description: sha256 of the exported bars this peer traded on — the fairness contract's provenance (PEER_BOT_COMPARISON.md §3).
+        strategy_hash:
+          type: string
+          nullable: true
+          description: sha256 of the frozen strategy file, so a re-tuned peer is visible rather than silently re-scored.
+        error:
+          type: string
+          nullable: true
+      required: [id, peer_name, bot, strategy, mode, window_label, generated_at, window_start, window_end]
+
+    PeerScorecardResponse:
+      type: object
+      description: |
+        A full peer scorecard: every PeerScorecardSummary field, plus the
+        pasteable digest and the raw Scorecard.to_dict() payload — the book's
+        own evaluation and a peer's are the same Scorecard rendered two ways.
+      properties:
+        id:
+          type: integer
+        peer_name:
+          type: string
+        bot:
+          type: string
+          enum: [freqtrade, nautilus, jesse]
+        strategy:
+          type: string
+        mode:
+          type: string
+          enum: [replay, live]
+        window_label:
+          type: string
+        generated_at:
+          type: string
+          format: date-time
+        window_start:
+          type: string
+          format: date-time
+        window_end:
+          type: string
+          format: date-time
+        return_pct:
+          type: number
+          nullable: true
+        benchmark_pct:
+          type: number
+          nullable: true
+        capture_ratio:
+          type: number
+          nullable: true
+        alpha_pp:
+          type: number
+          nullable: true
+        sharpe_ratio:
+          type: number
+          nullable: true
+        max_drawdown_pct:
+          type: number
+          nullable: true
+        total_trades:
+          type: integer
+          nullable: true
+        bars_hash:
+          type: string
+          nullable: true
+        strategy_hash:
+          type: string
+          nullable: true
+        error:
+          type: string
+          nullable: true
+        digest:
+          type: string
+        payload:
+          type: object
+          additionalProperties: true
+      required: [id, peer_name, bot, strategy, mode, window_label, generated_at, window_start, window_end, digest]
+
+    PeerFieldEntry:
+      type: object
+      description: |
+        One peer's row inside a PeerField: every PeerScorecardSummary field,
+        plus where it ranks among the other peers on this window. A rank is
+        null when the metric itself is null (nothing to rank).
+      properties:
+        id:
+          type: integer
+        peer_name:
+          type: string
+        bot:
+          type: string
+          enum: [freqtrade, nautilus, jesse]
+        strategy:
+          type: string
+        mode:
+          type: string
+          enum: [replay, live]
+        window_label:
+          type: string
+        generated_at:
+          type: string
+          format: date-time
+        window_start:
+          type: string
+          format: date-time
+        window_end:
+          type: string
+          format: date-time
+        return_pct:
+          type: number
+          nullable: true
+        benchmark_pct:
+          type: number
+          nullable: true
+        capture_ratio:
+          type: number
+          nullable: true
+        alpha_pp:
+          type: number
+          nullable: true
+        sharpe_ratio:
+          type: number
+          nullable: true
+        max_drawdown_pct:
+          type: number
+          nullable: true
+        total_trades:
+          type: integer
+          nullable: true
+        bars_hash:
+          type: string
+          nullable: true
+        strategy_hash:
+          type: string
+          nullable: true
+        error:
+          type: string
+          nullable: true
+        rank_capture_ratio:
+          type: integer
+          nullable: true
+          description: 1 = best capture ratio among peers with one, on this window.
+        rank_return_pct:
+          type: integer
+          nullable: true
+        rank_max_drawdown_pct:
+          type: integer
+          nullable: true
+          description: 1 = smallest (best) max drawdown.
+      required: [id, peer_name, bot, strategy, mode, window_label, generated_at, window_start, window_end]
+
+    PeerField:
+      type: object
+      description: |
+        Every peer scored on one named window, ranked, with our own backtest
+        run for the same window when `our_run_id` was given — scored through
+        the identical function, so the ranks never mix two kinds of arithmetic.
+      properties:
+        window_label:
+          type: string
+        peer_count:
+          type: integer
+        our_scorecard:
+          allOf:
+            - $ref: '#/components/schemas/PeerScorecardSummary'
+          nullable: true
+          description: Null when no backtest run has been scored for this window yet.
+        peers:
+          type: array
+          items:
+            $ref: '#/components/schemas/PeerFieldEntry'
+      required: [window_label, peer_count, peers]
+
     # ── Oracle (read-only lineage for agents; see /api/oracle/*) ──────────
     OracleSessionSummary:
       type: object
@@ -2849,10 +3186,13 @@ components:
     CurvePointModel:
       type: object
       description: |
-        One sample of a curve. `value` is the displayable portfolio-level value in
-        the session accounting currency; every benchmark begins at the same anchor
-        value as the book so values share one monetary axis. `index` is 100 at the
-        anchor and is for return calculations and hover context only.
+        One sample of a curve. **Plot `index` or `rebased`, never `value`**:
+        `value` is the raw level (dollars for the book, ~$60k for BTC, a basket
+        level near 1.0 for equal-weight) and puts every series on a different
+        scale. `index` is 100 at the anchor (percent view); `rebased` is the
+        book's anchor capital tracked along the series — "what the same dollars
+        would be worth had they sat in BTC" — so a benchmark shares the book's
+        own dollar axis.
       properties:
         timestamp:
           type: string
@@ -2860,6 +3200,10 @@ components:
           type: number
         value:
           type: number
+        rebased:
+          type: number
+          nullable: true
+          description: book anchor value × index / 100. Null only if the book had no priced anchor.
       required: [timestamp, index, value]
     FillMarkerModel:
       type: object
@@ -2868,11 +3212,11 @@ components:
         order_id:
           type: string
           nullable: true
-          x-implementation-status: requested
+          x-implementation-status: implemented
         fill_id:
           type: integer
           nullable: true
-          x-implementation-status: requested
+          x-implementation-status: implemented
         timestamp:
           type: string
         symbol:
@@ -2904,6 +3248,44 @@ components:
           nullable: true
           description: The book's index at that hour — where to draw the marker.
       required: [timestamp, symbol, side, price, quantity]
+    PeerCurveModel:
+      type: object
+      description: |
+        One live-shadow peer bot's book (docs/analysis/PEER_BOT_COMPARISON.md)
+        on the engine's own curve axis. Same semantics as `equal_weight`/`btc`:
+        `index` is 100 at the first peer valuation at or after the book's
+        `anchor`; `rebased` is the book's anchor dollars tracked along the peer.
+        `stale` = the collector's last poll is older than two hours — draw it
+        as stale, not as a live line. Only present when the Tower runs with
+        `PEER_COMPARISON_ENABLED=true`; a peer with no valuation inside the
+        stretch is named in `notes` instead of being drawn flat.
+      properties:
+        peer_name:
+          type: string
+          description: '`<bot>-<strategy>`, e.g. freqtrade-ema-cross — the legend label.'
+        bot:
+          type: string
+          enum: [freqtrade, nautilus, jesse]
+        strategy:
+          type: string
+        mode:
+          type: string
+          enum: [live]
+        window_label:
+          type: string
+        generated_at:
+          type: string
+          format: date-time
+          description: When the collector last scored this peer.
+        stale:
+          type: boolean
+        series:
+          type: array
+          items:
+            $ref: '#/components/schemas/CurvePointModel'
+      required: [peer_name, bot, strategy, mode, window_label, generated_at, stale, series]
+      x-implementation-status: implemented
+
     EvaluationCurves:
       type: object
       description: |
@@ -2920,20 +3302,20 @@ components:
           type: string
           nullable: true
           format: date-time
-          x-implementation-status: requested
+          x-implementation-status: implemented
         generated_at:
           type: string
           nullable: true
           format: date-time
-          x-implementation-status: requested
+          x-implementation-status: implemented
         snapshot_id:
           type: string
           nullable: true
-          x-implementation-status: requested
+          x-implementation-status: implemented
         stale_after_seconds:
           type: number
           nullable: true
-          x-implementation-status: requested
+          x-implementation-status: implemented
         return_method:
           type: string
           nullable: true
@@ -2941,15 +3323,15 @@ components:
             Server-defined performance method, for example `time_weighted` or
             `ledger_change`. Null means the frontend must not label the curve as
             a cash-flow-adjusted return.
-          x-implementation-status: requested
+          x-implementation-status: implemented
         net_of_fees:
           type: boolean
           nullable: true
-          x-implementation-status: requested
+          x-implementation-status: implemented
         cash_flow_adjusted:
           type: boolean
           nullable: true
-          x-implementation-status: requested
+          x-implementation-status: implemented
         session_id:
           type: string
         mode:
@@ -3004,6 +3386,16 @@ components:
           type: array
           items:
             type: string
+        peers:
+          type: array
+          items:
+            $ref: '#/components/schemas/PeerCurveModel'
+          description: |
+            Live-shadow peer bots on this stretch and dollar axis. Empty when
+            `PEER_COMPARISON_ENABLED` is off on the Tower, or no live peer has a
+            valuation in the stretch (see `notes`). Draw each `series` exactly
+            like `equal_weight`: same `index`/`rebased` choice, own legend chip.
+          x-implementation-status: implemented
       required: [session_id, mode, window_start, window_end]
     DecisionSummary:
       type: object
@@ -3361,7 +3753,7 @@ components:
         reason:
           type: string
           nullable: true
-      x-implementation-status: requested
+      x-implementation-status: implemented
     AuditEvent:
       type: object
       nullable: true
@@ -3420,7 +3812,111 @@ components:
           nullable: true
       required:
         - id
-      x-implementation-status: requested
+      x-implementation-status: implemented
+    Freshness:
+      type: object
+      description: |
+        Shared optional freshness fields. `as_of` is the MEASUREMENT time (when the
+        engine last observed what the payload describes), never the request time;
+        `generated_at` is when the Tower assembled the response; `snapshot_id` names
+        the stored read the payload came from; `stale_after_seconds` is how old
+        `as_of` may be before the reader should call it stale. Null = not measured.
+      properties:
+        as_of:
+          type: string
+          nullable: true
+          format: date-time
+        generated_at:
+          type: string
+          nullable: true
+          format: date-time
+        snapshot_id:
+          type: string
+          nullable: true
+        stale_after_seconds:
+          type: number
+          nullable: true
+      x-implementation-status: implemented
+    TelemetryComponents:
+      type: object
+      nullable: true
+      description: |
+        Per-component health. `engine` is the only block the Tower derives (from the
+        age of the engine's published telemetry row against its own
+        `stale_after_seconds`); the others are served exactly as the engine
+        published them. A null component means the engine has no view of it in
+        this mode (a paper engine has no `exchange`).
+      properties:
+        engine:
+          allOf:
+            - $ref: '#/components/schemas/ComponentHealth'
+          nullable: true
+        market_data:
+          allOf:
+            - $ref: '#/components/schemas/ComponentHealth'
+          nullable: true
+        exchange:
+          allOf:
+            - $ref: '#/components/schemas/ComponentHealth'
+          nullable: true
+        critic:
+          allOf:
+            - $ref: '#/components/schemas/ComponentHealth'
+          nullable: true
+      x-implementation-status: implemented
+    ArmingState:
+      type: object
+      nullable: true
+      description: |
+        The broker's effective switches as the engine reports them. Null is unknown,
+        never disarmed. `validate_only` true means orders are sent to the venue for
+        validation and not placed; display it neutrally.
+      properties:
+        live_mode:
+          type: string
+          nullable: true
+        armed:
+          type: boolean
+          nullable: true
+        validate_only:
+          type: boolean
+          nullable: true
+        max_order_usd:
+          type: number
+          nullable: true
+      x-implementation-status: implemented
+    ReconciliationState:
+      type: object
+      nullable: true
+      description: |
+        The engine's last exchange reconciliation — its verdict and counts. A
+        balance subtraction in the browser is not a reconciliation. `state` is
+        `clean` (book matched the exchange) or `adjusted` (the engine adopted,
+        resized or retired lots, or found holdings it could not price).
+      properties:
+        as_of:
+          type: string
+          nullable: true
+          format: date-time
+        state:
+          type: string
+          nullable: true
+        matched:
+          type: integer
+          nullable: true
+        adopted:
+          type: integer
+          nullable: true
+        unpriceable:
+          type: integer
+          nullable: true
+        missing_on_exchange:
+          type: integer
+          nullable: true
+        reason:
+          type: string
+          nullable: true
+      x-implementation-status: implemented
     EngineTelemetry:
       type: object
       nullable: true
@@ -3449,25 +3945,9 @@ components:
             - paper
             - real
         components:
-          type: object
+          allOf:
+            - $ref: '#/components/schemas/TelemetryComponents'
           nullable: true
-          properties:
-            engine:
-              allOf:
-                - $ref: '#/components/schemas/ComponentHealth'
-              nullable: true
-            market_data:
-              allOf:
-                - $ref: '#/components/schemas/ComponentHealth'
-              nullable: true
-            exchange:
-              allOf:
-                - $ref: '#/components/schemas/ComponentHealth'
-              nullable: true
-            critic:
-              allOf:
-                - $ref: '#/components/schemas/ComponentHealth'
-              nullable: true
         last_cycle_at:
           type: string
           nullable: true
@@ -3484,49 +3964,15 @@ components:
           items:
             $ref: '#/components/schemas/AuditEvent'
         arming:
-          type: object
+          allOf:
+            - $ref: '#/components/schemas/ArmingState'
           nullable: true
-          properties:
-            live_mode:
-              type: string
-              nullable: true
-            armed:
-              type: boolean
-              nullable: true
-            validate_only:
-              type: boolean
-              nullable: true
-            max_order_usd:
-              type: number
-              nullable: true
         reconciliation:
-          type: object
+          allOf:
+            - $ref: '#/components/schemas/ReconciliationState'
           nullable: true
-          properties:
-            as_of:
-              type: string
-              nullable: true
-              format: date-time
-            state:
-              type: string
-              nullable: true
-            matched:
-              type: integer
-              nullable: true
-            adopted:
-              type: integer
-              nullable: true
-            unpriceable:
-              type: integer
-              nullable: true
-            missing_on_exchange:
-              type: integer
-              nullable: true
-            reason:
-              type: string
-              nullable: true
       required: [session_id, mode]
-      x-implementation-status: requested
+      x-implementation-status: implemented
     AuditEventsResponse:
       type: object
       nullable: true
@@ -3557,7 +4003,7 @@ components:
           type: integer
           nullable: true
           description: Session-wide unresolved-event count; it can exceed the page length.
-      x-implementation-status: requested
+      x-implementation-status: implemented
     ExecutionQuality:
       type: object
       nullable: true
@@ -3590,7 +4036,7 @@ components:
         unavailable_reason:
           type: string
           nullable: true
-      x-implementation-status: requested
+      x-implementation-status: implemented
     ExecutionEvent:
       type: object
       nullable: true
@@ -3609,7 +4055,7 @@ components:
           nullable: true
       required:
         - id
-      x-implementation-status: requested
+      x-implementation-status: implemented
     OrderExecution:
       type: object
       nullable: true
@@ -3654,9 +4100,26 @@ components:
           nullable: true
           items:
             $ref: '#/components/schemas/ExecutionEvent'
+        as_of:
+          type: string
+          nullable: true
+          format: date-time
+          description: When the venue's answer (or, before it, the submission) was recorded.
+        generated_at:
+          type: string
+          nullable: true
+          format: date-time
+        exchange_order_id:
+          type: string
+          nullable: true
+          description: The venue's own order id, when it returned one; null for paper and for rejections before acknowledgement.
+        reason:
+          type: string
+          nullable: true
+          description: The venue's rejection reason, or the broker's fill note (e.g. a partial-fill notice). Null on a clean fill.
       required:
         - order_id
-      x-implementation-status: requested
+      x-implementation-status: implemented
     PositionProtection:
       type: object
       nullable: true
@@ -3691,4 +4154,4 @@ components:
         reason:
           type: string
           nullable: true
-      x-implementation-status: requested
+      x-implementation-status: implemented

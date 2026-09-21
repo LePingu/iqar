@@ -598,6 +598,59 @@ export interface CurvePoint {
   timestamp: string;
   index: number;
   value: number;
+  /** Book-anchor dollars tracked along this series; use for the dollar chart view. */
+  rebased?: number | null;
+}
+
+export interface PeerCurve {
+  peer_name: string;
+  bot: 'freqtrade' | 'nautilus' | 'jesse';
+  strategy: string;
+  mode: 'live';
+  window_label: string;
+  generated_at: string;
+  stale: boolean;
+  series: CurvePoint[];
+}
+
+export interface PeerScorecardSummary {
+  id: number;
+  peer_name: string;
+  bot: 'freqtrade' | 'nautilus' | 'jesse';
+  strategy: string;
+  mode: 'replay' | 'live';
+  window_label: string;
+  generated_at: string;
+  window_start: string;
+  window_end: string;
+  return_pct?: number | null;
+  benchmark_pct?: number | null;
+  capture_ratio?: number | null;
+  alpha_pp?: number | null;
+  sharpe_ratio?: number | null;
+  max_drawdown_pct?: number | null;
+  total_trades?: number | null;
+  bars_hash?: string | null;
+  strategy_hash?: string | null;
+  error?: string | null;
+}
+
+export interface PeerScorecardResponse extends PeerScorecardSummary {
+  digest: string;
+  payload?: Record<string, unknown>;
+}
+
+export interface PeerFieldEntry extends PeerScorecardSummary {
+  rank_capture_ratio?: number | null;
+  rank_return_pct?: number | null;
+  rank_max_drawdown_pct?: number | null;
+}
+
+export interface PeerField {
+  window_label: string;
+  peer_count: number;
+  our_scorecard?: PeerScorecardSummary | null;
+  peers: PeerFieldEntry[];
 }
 
 /** One engine fill placed on the curve and linked to its decision. */
@@ -645,6 +698,7 @@ export interface EvaluationCurves extends DataFreshness {
   btc?: CurvePoint[];
   exposure_matched?: CurvePoint[];
   markers?: FillMarker[];
+  peers?: PeerCurve[];
   discontinuities?: Record<string, unknown>[];
   notes?: string[];
 }
@@ -779,8 +833,8 @@ export type DecisionSelection =
   | { kind: 'event'; event: AuditEvent }
   | { kind: 'order'; orderId: string };
 
-// Live monitor v2 — additive contract requested in front/BACKEND_UI_HANDOFF.md.
-// Missing/null is unknown, including when an older server has no endpoint yet.
+// Live monitor v2 — implemented additive contract in front/BACKEND_UI_HANDOFF.md.
+// Missing/null is unknown, including when an older Tower has no endpoint yet.
 export interface DataFreshness {
   as_of?: string | null;
   generated_at?: string | null;

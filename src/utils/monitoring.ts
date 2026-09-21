@@ -1,5 +1,6 @@
 import type { CurvePoint, DataFreshness, EquityPoint } from '../types/api';
 
+export type CurveView = 'percent' | 'dollars';
 export type PerformancePoint = { time: number; value: number; returnPct: number };
 
 export const measured = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
@@ -13,11 +14,12 @@ export function isStale(data?: DataFreshness | null, now = Date.now()) {
   const timestamp = Date.parse(data.as_of);
   return Number.isFinite(timestamp) ? now - timestamp > data.stale_after_seconds * 1000 : null;
 }
-export function curvePoints(data?: CurvePoint[] | null): PerformancePoint[] {
+export function curvePoints(data?: CurvePoint[] | null, view: CurveView = 'percent'): PerformancePoint[] {
   const unique = new Map<number, { value: number; returnPct: number }>();
   for (const point of rows(data)) {
     const timestamp = Date.parse(point.timestamp);
-    if (Number.isFinite(timestamp) && measured(point.value) && measured(point.index)) unique.set(Math.floor(timestamp / 1000), { value: point.value, returnPct: point.index - 100 });
+    const chartValue = view === 'percent' ? point.index - 100 : point.rebased;
+    if (Number.isFinite(timestamp) && measured(chartValue) && measured(point.index)) unique.set(Math.floor(timestamp / 1000), { value: chartValue, returnPct: point.index - 100 });
   }
   return [...unique].sort(([a], [b]) => a - b).map(([time, point]) => ({ time, ...point }));
 }

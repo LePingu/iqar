@@ -9,7 +9,7 @@ const artifacts = process.env.TEST_ARTIFACT_DIR ?? '/private/tmp/iqar-ui-check/s
 await mkdir(artifacts, { recursive: true });
 const now = Date.now();
 const asOf = new Date(now).toISOString();
-const points = Array.from({ length: 120 }, (_, i) => ({ timestamp: new Date(now - (119 - i) * 3600000).toISOString(), index: 100 + i / 28 + Math.sin(i * .7) * .12, value: 100000 + i * 36 }));
+const points = Array.from({ length: 120 }, (_, i) => { const index = 100 + i / 28 + Math.sin(i * .7) * .12; return { timestamp: new Date(now - (119 - i) * 3600000).toISOString(), index, value: 100000 + i * 36, rebased: 100000 * index / 100 }; });
 const fill = { id: 42, symbol: 'BTC/USD', side: 'BUY', price: 62410, quantity: .024, timestamp: asOf, realized_pnl: null, realized_pnl_pct: null, source: 'engine', order_id: 'order-42', decision_id: 'decision-42', position_id: 7, execution_quality: { slippage_bps: 4.2, fees: .84, fee_currency: 'USD', fill_time_ms: 320, reference: 'arrival_midpoint' } };
 const metricFills = [
   { ...fill, id: 43, symbol: 'ETH/USD', side: 'SELL', quantity: .5, price: 2480, realized_pnl: 125, realized_pnl_pct: 10.25, commission: .25, execution_quality: null },
@@ -72,7 +72,7 @@ try {
   assert.ok(requests.some(r => r.path.endsWith('/orders/order-42')));
   await page.locator('.performance-canvas').hover({ position: { x: 360, y: 160 } });
   await page.locator('.chart-hover').waitFor();
-  assert.match(await page.locator('.chart-hover').innerText(), /Portfolio \$[\d,]+\.\d{2} \+[\d.]+%/);
+  assert.match(await page.locator('.chart-hover').innerText(), /Portfolio \$[\d,]+\.\d{2}\s*\+[\d.]+%/);
   assert.ok(!(await page.locator('.performance-heading').innerText()).includes('%'), 'percentage return belongs in the chart hover, not the heading');
   const btc = page.getByRole('checkbox', { name: 'BTC', exact: true });
   await btc.uncheck(); assert.equal(await btc.isChecked(), false); await btc.check();

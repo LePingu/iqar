@@ -292,6 +292,9 @@
 .chart-periods { display: flex; border: 1px solid #ffffff16; padding: 3px; border-radius: 7px; background: #090e10; flex-shrink: 0; }
 .chart-periods button { padding: 7px 11px; border-radius: 5px; font-size: 11px; color: #aeb7c3; cursor: pointer; }
 .chart-periods button[aria-pressed=true] { background: #d5b563; color: #211b0d; font-weight: 600; }
+.chart-view-toggle { display: inline-flex; gap: 2px; margin-top: 10px; padding: 3px; border: 1px solid #ffffff16; border-radius: 7px; background: #090e10; }
+.chart-view-toggle button { padding: 5px 9px; border-radius: 5px; color: #aeb7c3; font-size: 10px; }
+.chart-view-toggle button[aria-pressed=true] { background: #26313a; color: #f2f5f8; }
 .chart-legend { display: flex; flex-wrap: wrap; gap: 7px; margin: 16px 0 20px; }
 .curve-toggle { position: relative; display: inline-flex; align-items: center; gap: 7px; padding: 6px 9px; border: 1px solid #ffffff1a; border-radius: 6px; color: #a7b1bc; font-size: 11px; cursor: pointer; transition: background .15s, border-color .15s; }
 .curve-toggle input { position: absolute; opacity: 0; width: 1px; height: 1px; }
@@ -305,6 +308,14 @@
 .chart-hover > span:first-child { color: #778492; }
 .chart-hover i { display: inline-block; width: 7px; height: 7px; margin-right: 5px; border-radius: 50%; }
 .chart-hover b { margin-left: 4px; color: #d7dee7; font-weight: 500; }
+.peer-legend { margin-top: -13px; }
+.peer-toggle { border-style: dashed; opacity: .88; }
+.peer-scorecard { display: flex; flex-wrap: wrap; gap: 5px 13px; margin-top: 10px; color: #98a6b5; font-size: 10px; }
+.peer-scorecard strong { color: #c9d3dd; font-weight: 600; }
+.peer-field { margin-top: 16px; }
+.peer-field-heading { display: flex; align-items: end; justify-content: space-between; gap: 14px; margin-bottom: 14px; }
+.peer-field-heading h3 { font-size: 16px; font-weight: 600; }.peer-field-heading p { margin-top: 4px; color: #95a0ad; font-size: 11px; }.peer-field-heading label { color: #95a0ad; font-size: 11px; }.peer-field-heading select { display: block; margin-top: 5px; min-width: 160px; }
+.peer-ranks { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 12px; }.peer-ranks span { padding: 5px 8px; border: 1px solid #ffffff14; border-radius: 5px; color: #b5c0cb; font-size: 10px; }.peer-table tbody tr { cursor: pointer; }.peer-table td small { display: block; margin-top: 2px; color: #81909d; font-size: 10px; }.peer-ours { background: #d4af5614; }.peer-detail { margin-top: 14px; color: #aeb8c3; font-size: 11px; }.peer-detail summary { cursor: pointer; color: #e1e8ee; }.peer-detail pre { max-height: 260px; overflow: auto; margin-top: 8px; padding: 10px; border-radius: 6px; background: #080d10; white-space: pre-wrap; }
 .chart-message, .observation-note { color: #a6b1be; font-size: 11px; margin: 8px 0; }
 .chart-data-notes { color: #84929f; font-size: 10px; }
 .chart-data-notes summary { cursor: pointer; }

@@ -8,6 +8,7 @@ import { formatCurrency, formatPercentage, fmtPrice } from '../utils/trading';
 import { CandlestickExplorer } from './CandlestickExplorer';
 import { GlassCard } from '../components/GlassCard';
 import { KPICard } from '../components/KPICard';
+import { PeerFieldPanel } from '../components/PeerFieldPanel';
 import type { AssetSummary, Trade } from '../types/api';
 import {
   useReactTable,
@@ -347,6 +348,7 @@ function RunDetailContent() {
 
       {/* Trades Grid */}
       {runId && <TradesGrid runId={runId} />}
+      {runId && <PeerFieldPanel runId={runId} />}
       <DecisionBook />
     </div>
   );

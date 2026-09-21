@@ -289,7 +289,7 @@ fill-history table, which uses the same row model.
 | Exchange cash, holdings value, total and holdings count | Exchange-account disclosure |
 | Ledger total, exchange/ledger difference, managed-position count and account-read time | Exchange-account disclosure; retain stale indication |
 | Decision confidence, regime weight, ML probability, critic/MTF values and requested/resolved size | Decision cards and the metrics/signals disclosure, even if context is null |
-| Historical equity | The one monetary-value chart; percentage return appears in its hover readout |
+| Historical equity | The one percentage chart; current monetary balance remains in the summary |
 
 ROI comes from `realized_pnl_pct`; do not calculate it in the browser or confuse
 it with portfolio ROI. SELL engine fills display monetary return and ROI
@@ -446,14 +446,12 @@ page is a **portfolio and audit view**: adopted positions, the exchange's own fi
 history, the equity curve from the moment observation began. All of it is real;
 none of it was placed by the strategy yet.
 
-> ⚠️ **`ArmingStatePanel` has no data source.** The four switches it is specified
-> to render (`LIVE_MODE`, `LIVE_KRAKEN_ARMED`, `LIVE_KRAKEN_VALIDATE_ONLY`, the
-> per-order cap) are engine *configuration*; `mode` is now served on the status
-> payload but the other three are not persisted anywhere the tower can read.
-> **Do not infer them.** Rendering "unarmed" from an absent field, for an engine
-> that may be armed, is the more dangerous of the two errors — build the panel
-> only once the fields exist, and until then show an explicit "arming state
-> unavailable" rather than a reassuring default.
+> **`ArmingStatePanel` data source (since 2026-09-21):**
+> `GET /api/engine/{session_id}/telemetry` → `arming.{live_mode, armed,
+> validate_only, max_order_usd}`, published by the engine from its broker's
+> effective switches. Null (or a 404 from an older Tower) is *unknown*: render
+> "arming state unavailable", never "unarmed" — claiming that for a possibly-armed
+> engine is the more dangerous of the two errors.
 
 ---
 
@@ -728,23 +726,58 @@ beside this file contains the schemas. Entries marked `x-implementation-status:
 requested` are pending backend work; `GET /openapi.json` on a running tower reports
 what that deployment actually serves.
 
+### 2026-09-21 (later) — peer bot comparison: backend implemented, views requested
+
+- **Read [BACKEND_UI_HANDOFF.md §4](BACKEND_UI_HANDOFF.md#4-peer-comparison--get-apipeers-and-evaluationcurvespeers)**
+  — routes, the three views (peer lines on the live chart; the peer field with
+  rank tiles; the peer detail drawer), and the semantics to keep. This
+  supersedes the earlier same-day entry below that listed these routes as
+  `requested`: they are now `x-implementation-status: implemented` in
+  `openapi.yaml`, validated on real Freqtrade and NautilusTrader output.
+- **Gate**: `PEER_COMPARISON_ENABLED` on the Tower, default off. Off → `/api/peers/*`
+  404 (render *unavailable*, not "no peers") and `EvaluationCurves.peers: []`.
+- **New endpoints**: `GET /api/peers`, `GET /api/peers/{peer_name}`,
+  `GET /api/peers/field/{window_label}?our_run_id=`.
+- **New schemas**: `PeerScorecardSummary`, `PeerScorecardResponse`, `PeerFieldEntry`,
+  `PeerField`, `PeerCurveModel`.
+- **Existing schemas gained fields** (additive): `EvaluationCurves.peers[]`
+  (live-shadow peers on the book's own axis, already cut and re-indexed to the
+  book's `anchor` server-side); `CurvePointModel.rebased` on **every** curve
+  series — see next bullet.
+- **Bug this fixes on the current chart**: the main chart plots `value`, which is
+  the raw level (≈$10k book vs ≈$60k BTC) — hence the scale gap. Plot `index`
+  (percent) or the new `rebased` (the book's anchor dollars tracked along the
+  series); never `value`. Offer the two as a percent/dollar toggle.
+- **Views requested** (Route E/F chart chips + table; Route C or `/peers` field
+  panel; detail drawer) — all specified in §4 of the handoff. No new top-level
+  route is required for the chart work; the field panel may be either.
+- **Behaviour to know**: live-shadow rows exist only once the peer containers run
+  (they have not yet been deployed); until then `peers: []` even with the flag
+  on, and `GET /api/peers` shows replay rows only. Replay rows are on a 5-symbol
+  validation basket; the field is comparable to a book run only on the same
+  basket and window (the handoff explains the hashes to show).
+
 ### 2026-09-21 — approved live monitor redesign and backend requests
 
-- **Read [BACKEND_UI_HANDOFF.md](BACKEND_UI_HANDOFF.md)** for the requested data
-  additions, semantics, polling, rollout behavior and backend acceptance checks.
+- **Read [BACKEND_UI_HANDOFF.md](BACKEND_UI_HANDOFF.md)** — §"What the backend
+  serves" is the authoritative restatement of routes, fields and semantics.
 - Approved reference: [live-trading-approved.png](mockups/live-trading-approved.png).
   Screenshot values are illustrative; the frontend does not ship fixture data.
-- This replaces Route E/F's stacked charts and decision modal: one portfolio-value
-  chart with percentage return in the hover readout, custom benchmark toggles, tabs for positions/decisions/fills/events,
+- This replaces Route E/F's stacked charts and decision modal: one percentage
+  chart, custom benchmark toggles, tabs for positions/decisions/fills/events,
   compact telemetry and a persistent right-hand details explorer. Halt stays in
   the header; engine settings and real account reconciliation use disclosures.
-- **Requested, not yet confirmed deployed**: `/api/engine/{session_id}/telemetry`,
-  `/events`, `/orders/{order_id}`. New OpenAPI elements carry
-  `x-implementation-status: requested`. Existing backend-exported entries retain
-  their semantics. Keep these annotations until the backend implements them.
+- **Implemented (backend, same day)**: `/api/engine/{session_id}/telemetry`,
+  `/events`, `/orders/{order_id}` and every additive field. OpenAPI elements now
+  carry `x-implementation-status: implemented`. A Tower older than this deploy
+  still 404s the new routes and omits the new fields — the rollout rules
+  (nullable, empty-vs-null, unavailable-not-healthy) still cover that case.
 - Additive nullable fields cover freshness, exposure, return methodology,
   fill execution quality/order linkage and position protection. Null is unknown.
-  404/501/204 on new reads render unavailable; auth/service errors remain visible.
+  404 on new reads renders unavailable; auth/service errors remain visible.
+- `/curves` is now served from stored hourly bars (sub-second reads) and states
+  `return_method` / `net_of_fees` / `cash_flow_adjusted` explicitly — the
+  "Ledger value change only" fallback is no longer needed.
 - Event streams and replay comparison remain future work, not UI dependencies.
 
 ### 2026-09-19 — decision identity, decision explorer, curve overlays

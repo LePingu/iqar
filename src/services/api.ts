@@ -1,5 +1,6 @@
 import type {
   EngineTelemetry, AuditEventsResponse, OrderExecution,
+  PeerScorecardSummary, PeerScorecardResponse, PeerField,
   SystemStatus,
   BacktestConfig,
   BacktestSummary,
@@ -87,13 +88,22 @@ function decisionBase(source: DecisionSource) {
 export const api = {
   getEngineTelemetry: (sessionId: string) =>
     fetchOptional<EngineTelemetry>(`/engine/${encodeURIComponent(sessionId)}/telemetry`),
-  getEngineEvents: (sessionId: string, cursor?: string) => {
+  getEngineEvents: (sessionId: string, options: { cursor?: string; category?: string; severity?: 'info' | 'warning' | 'critical'; active?: boolean } = {}) => {
     const params = new URLSearchParams({ limit: '50' });
-    if (cursor) params.set('cursor', cursor);
+    if (options.cursor) params.set('cursor', options.cursor);
+    if (options.category) params.set('category', options.category);
+    if (options.severity) params.set('severity', options.severity);
+    if (options.active != null) params.set('active', String(options.active));
     return fetchOptional<AuditEventsResponse>(`/engine/${encodeURIComponent(sessionId)}/events?${params}`);
   },
   getOrderExecution: (sessionId: string, orderId: string) =>
     fetchOptional<OrderExecution>(`/engine/${encodeURIComponent(sessionId)}/orders/${encodeURIComponent(orderId)}`),
+  getPeers: () => fetchOptional<PeerScorecardSummary[]>('/peers'),
+  getPeer: (peerName: string) => fetchOptional<PeerScorecardResponse>(`/peers/${encodeURIComponent(peerName)}`),
+  getPeerField: (windowLabel: string, ourRunId?: string) => {
+    const query = ourRunId ? `?our_run_id=${encodeURIComponent(ourRunId)}` : '';
+    return fetchOptional<PeerField>(`/peers/field/${encodeURIComponent(windowLabel)}${query}`);
+  },
 
   getDecisions: (source: DecisionSource, filters: {
     symbol?: string; action?: string; executed?: boolean; outcome?: string;
