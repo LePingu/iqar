@@ -60,7 +60,7 @@ export function LiveTradingWorkspace({ sessionId, status, data, dataError, curre
   };
   return <div className="trading-workspace">
     <div className="trading-main">
-      <EvaluationCurve sessionId={sessionId} mode={mode} ledger={data?.equity_curve} ledgerAsOf={data?.last_snapshot_ts} />
+      <EvaluationCurve sessionId={sessionId} mode={mode} currency={currency} ledger={data?.equity_curve} ledgerAsOf={data?.last_snapshot_ts} />
       {data?.observed_from && <p className="observation-note">Account observed since {formatDate(data.observed_from)}. Earlier account history is unavailable.</p>}
       <section className="activity-panel">
         <div className="activity-tabs" role="tablist" aria-label="Trading activity">{tabs.map((item, index) => <button key={item.id} id={`${id}-${item.id}`} role="tab" aria-selected={tab === item.id} aria-controls={`${id}-${item.id}-panel`} tabIndex={tab === item.id ? 0 : -1} onClick={() => setTab(item.id)} onKeyDown={event => navigateTabs(event, index)}><item.icon size={14} />{item.label}{item.count != null && <span>{item.count}</span>}</button>)}</div>

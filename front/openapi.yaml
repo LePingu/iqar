@@ -2849,9 +2849,10 @@ components:
     CurvePointModel:
       type: object
       description: |
-        One sample of a curve. `index` is 100 at the anchor so series of different
-        scale share an axis; `value` is the underlying level (dollars for the book,
-        the basket level for a benchmark).
+        One sample of a curve. `value` is the displayable portfolio-level value in
+        the session accounting currency; every benchmark begins at the same anchor
+        value as the book so values share one monetary axis. `index` is 100 at the
+        anchor and is for return calculations and hover context only.
       properties:
         timestamp:
           type: string

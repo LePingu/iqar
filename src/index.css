@@ -301,6 +301,10 @@
 .is-on .curve-check { background: var(--curve-color); border-color: var(--curve-color); }
 .curve-check svg { width: 12px; fill: none; stroke: #172025; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .chart-caption { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin: 14px 0; font-size: 10px; color: #95a0ad; }
+.chart-hover { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-top: 10px; padding: 9px 10px; border: 1px solid #ffffff12; border-radius: 6px; background: #0a0f12; color: #aeb8c4; font-size: 11px; font-variant-numeric: tabular-nums; }
+.chart-hover > span:first-child { color: #778492; }
+.chart-hover i { display: inline-block; width: 7px; height: 7px; margin-right: 5px; border-radius: 50%; }
+.chart-hover b { margin-left: 4px; color: #d7dee7; font-weight: 500; }
 .chart-message, .observation-note { color: #a6b1be; font-size: 11px; margin: 8px 0; }
 .chart-data-notes { color: #84929f; font-size: 10px; }
 .chart-data-notes summary { cursor: pointer; }

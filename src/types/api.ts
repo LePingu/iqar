@@ -593,7 +593,7 @@ export interface PaginatedLiveFills {
   fills: LiveFill[];
 }
 
-/** One sample of a curve. `index` is 100 at the anchor; `value` is the level. */
+/** One sample of a curve. `value` is the accounting-currency level; `index` is 100 at the anchor for return context. */
 export interface CurvePoint {
   timestamp: string;
   index: number;

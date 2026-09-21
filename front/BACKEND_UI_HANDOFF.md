@@ -13,7 +13,7 @@ The screenshot contains illustrative data; do not seed it into production.
 
 ## User-facing design
 
-- One main percentage performance chart, with accessible custom checkbox chips
+- One main portfolio-value performance chart, with accessible custom checkbox chips
   for portfolio, BTC, equal-weight and exposure-matched curves; 7/30/90-day ranges.
 - Compact portfolio-value / P&L-return / drawdown / exposure / positions strip.
 - Open positions, latest decisions (including declined book), recent fills and
@@ -154,10 +154,10 @@ Fees should come from venue records with documented conversion, not guessed rate
    freshness fields below. Null exposure stays unknown; no browser inference.
 5. `EvaluationCurves`: `return_method`, `net_of_fees`, `cash_flow_adjusted`, plus
    freshness fields. Only explicit true enables those labels in the UI. Each
-   existing index stays 100 at the shared anchor. Frontend displays `index - 100`
-   in percent. All benchmarks share the book's anchor and time grid; headline
-   difference is shown only when latest timestamps align. Rebuild boundaries and
-   missing-price coverage must remain explicit.
+   existing index stays 100 at the shared anchor. `value` is in the accounting
+   currency and every benchmark starts at the book's anchor value, so the chart
+   uses one monetary axis. Frontend shows `index - 100` only in hover context.
+   Rebuild boundaries and missing-price coverage must remain explicit.
 6. Shared optional freshness fields: `as_of`, `generated_at`, `snapshot_id`,
    `stale_after_seconds`. UTC ISO-8601 timestamps. `snapshot_id` identifies the
    underlying read version; independent resource versions must not be implied

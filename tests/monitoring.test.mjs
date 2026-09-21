@@ -21,27 +21,30 @@ test('null metrics remain unavailable while measured zero remains zero', () => {
 test('curve conversion sorts, deduplicates and rejects missing measurements', () => {
   const result = curvePoints([
     null,
-    { timestamp: '2026-09-21T01:00:00Z', index: 105 },
-    { timestamp: 'bad date', index: 150 },
-    { timestamp: '2026-09-21T02:00:00Z', index: null },
-    { timestamp: '2026-09-21T00:00:00Z', index: 100 },
-    { timestamp: '2026-09-21T01:00:00Z', index: 104 },
+    { timestamp: '2026-09-21T01:00:00Z', index: 105, value: 105000 },
+    { timestamp: 'bad date', index: 150, value: 150000 },
+    { timestamp: '2026-09-21T02:00:00Z', index: null, value: 120000 },
+    { timestamp: '2026-09-21T00:00:00Z', index: 100, value: 100000 },
+    { timestamp: '2026-09-21T01:00:00Z', index: 104, value: 104000 },
   ]);
-  assert.deepEqual(result.map(p => p.value), [0, 4]);
+  assert.deepEqual(result.map(p => p.value), [100000, 104000]);
+  assert.deepEqual(result.map(p => p.returnPct), [0, 4]);
   assert.ok(result[0].time < result[1].time);
   assert.deepEqual(curvePoints(null), []);
 });
 
 test('headline benchmark difference requires matching latest observations', () => {
-  const book = [{ timestamp: '2026-09-21T01:00:00Z', index: 104 }];
-  assert.equal(alignedComparison(book, [{ timestamp: '2026-09-20T01:00:00Z', index: 102 }]), null);
-  assert.deepEqual(alignedComparison(book, [{ timestamp: book[0].timestamp, index: 102 }]), { benchmark: 2, difference: 2 });
+  const book = [{ timestamp: '2026-09-21T01:00:00Z', index: 104, value: 104000 }];
+  assert.equal(alignedComparison(book, [{ timestamp: '2026-09-20T01:00:00Z', index: 102, value: 102000 }]), null);
+  assert.deepEqual(alignedComparison(book, [{ timestamp: book[0].timestamp, index: 102, value: 102000 }]), { benchmark: 2, difference: 2 });
 });
 
 test('ledger fallback respects the window and requires a positive measured anchor', () => {
   const now = Date.parse('2026-09-21T00:00:00Z');
   const t = now / 1000;
-  assert.deepEqual(ledgerCurve([{ time: t - 10 * 86400, capital: 10 }, { time: t - 86400, capital: 100 }, { time: t, capital: 110 }], 7, now).map(p => Math.round(p.value)), [0, 10]);
+  const curve = ledgerCurve([{ time: t - 10 * 86400, capital: 10 }, { time: t - 86400, capital: 100 }, { time: t, capital: 110 }], 7, now);
+  assert.deepEqual(curve.map(p => Math.round(p.value)), [100, 110]);
+  assert.deepEqual(curve.map(p => Math.round(p.returnPct)), [0, 10]);
   assert.deepEqual(ledgerCurve([{ time: t, capital: 0 }], 7, now), []);
   assert.deepEqual(ledgerCurve(null, 7, now), []);
 });

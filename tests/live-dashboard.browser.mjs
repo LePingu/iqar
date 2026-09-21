@@ -70,6 +70,10 @@ try {
   assert.equal(await page.locator('.performance-canvas').count(), 1);
   assert.equal(await page.locator('dialog[open]').count(), 0);
   assert.ok(requests.some(r => r.path.endsWith('/orders/order-42')));
+  await page.locator('.performance-canvas').hover({ position: { x: 360, y: 160 } });
+  await page.locator('.chart-hover').waitFor();
+  assert.match(await page.locator('.chart-hover').innerText(), /Portfolio \$[\d,]+\.\d{2} \+[\d.]+%/);
+  assert.ok(!(await page.locator('.performance-heading').innerText()).includes('%'), 'percentage return belongs in the chart hover, not the heading');
   const btc = page.getByRole('checkbox', { name: 'BTC', exact: true });
   await btc.uncheck(); assert.equal(await btc.isChecked(), false); await btc.check();
   await page.screenshot({ path: `${artifacts}/desktop.png`, fullPage: true });

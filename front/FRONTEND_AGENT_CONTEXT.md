@@ -289,7 +289,7 @@ fill-history table, which uses the same row model.
 | Exchange cash, holdings value, total and holdings count | Exchange-account disclosure |
 | Ledger total, exchange/ledger difference, managed-position count and account-read time | Exchange-account disclosure; retain stale indication |
 | Decision confidence, regime weight, ML probability, critic/MTF values and requested/resolved size | Decision cards and the metrics/signals disclosure, even if context is null |
-| Historical equity | The one percentage chart; current monetary balance remains in the summary |
+| Historical equity | The one monetary-value chart; percentage return appears in its hover readout |
 
 ROI comes from `realized_pnl_pct`; do not calculate it in the browser or confuse
 it with portfolio ROI. SELL engine fills display monetary return and ROI
@@ -734,8 +734,8 @@ what that deployment actually serves.
   additions, semantics, polling, rollout behavior and backend acceptance checks.
 - Approved reference: [live-trading-approved.png](mockups/live-trading-approved.png).
   Screenshot values are illustrative; the frontend does not ship fixture data.
-- This replaces Route E/F's stacked charts and decision modal: one percentage
-  chart, custom benchmark toggles, tabs for positions/decisions/fills/events,
+- This replaces Route E/F's stacked charts and decision modal: one portfolio-value
+  chart with percentage return in the hover readout, custom benchmark toggles, tabs for positions/decisions/fills/events,
   compact telemetry and a persistent right-hand details explorer. Halt stays in
   the header; engine settings and real account reconciliation use disclosures.
 - **Requested, not yet confirmed deployed**: `/api/engine/{session_id}/telemetry`,
