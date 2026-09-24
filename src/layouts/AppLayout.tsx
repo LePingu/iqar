@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Outlet, Link } from '@tanstack/react-router';
 import { FiActivity, FiServer, FiTrendingUp, FiRadio, FiMenu, FiX, FiAlertTriangle, FiBarChart2 } from 'react-icons/fi';
 import { useRole } from '../contexts/RoleContext';
-import logoUrl from '../assets/iqar_logo.png';
+import logoUrl from '../assets/iqar_logo_v5.png';
 
 interface NavItem {
   to: string;
@@ -14,10 +14,10 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { to: '/', label: 'Control Tower', icon: <FiServer size={18} />, exact: true, adminOnly: true },
-  { to: '/backtests', label: 'Runs Browser', icon: <FiTrendingUp size={18} />, exact: true, adminOnly: true },
-  { to: '/backtests/live', label: 'Live Monitor', icon: <FiActivity size={18} />, adminOnly: true },
-  { to: '/live', label: 'Live Trading', icon: <FiRadio size={18} />, exact: true },
-  { to: '/live/real', label: 'Real Money', icon: <FiAlertTriangle size={18} />, adminOnly: true },
+  { to: '/backtests', label: 'Backtest runs', icon: <FiTrendingUp size={18} />, exact: true, adminOnly: true },
+  { to: '/backtests/live', label: 'Backtest monitor', icon: <FiActivity size={18} />, adminOnly: true },
+  { to: '/live', label: 'Paper trading', icon: <FiRadio size={18} />, exact: true },
+  { to: '/live/real', label: 'Real trading', icon: <FiAlertTriangle size={18} />, adminOnly: true },
   { to: '/live/evaluation', label: 'Evaluation', icon: <FiBarChart2 size={18} /> },
 ];
 
@@ -52,7 +52,7 @@ export function AppLayout() {
         {/* Logo */}
         <div className="flex items-center justify-between px-4 py-4 border-b border-[var(--color-border)]">
           <div className="flex items-center gap-2.5">
-            <span className="app-wordmark">IQAR</span>
+            <img src={logoUrl} alt="IQAR" className="h-28 w-28 object-contain" />
           </div>
           <button
             className="md:hidden text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]"
@@ -112,7 +112,7 @@ export function AppLayout() {
             <FiMenu size={22} />
           </button>
           <div className="flex items-center gap-2">
-            <img src={logoUrl} alt="IQAR" className="h-6 w-auto object-contain" />
+            <img src={logoUrl} alt="IQAR" className="h-12 w-12 object-contain" />
           </div>
           <div className="w-6" /> {/* Spacer for centering */}
         </header>

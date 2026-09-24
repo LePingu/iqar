@@ -61,15 +61,21 @@ async function scenario(kind = 'full', role = 'admin', route = '/live') {
 }
 try {
   const { page, requests } = await scenario();
+  assert.equal(await page.locator('dialog[open]').count(), 0);
+  assert.equal(await page.getByRole('tab', { name: 'Events', exact: true }).count(), 0);
   await page.getByRole('button', { name: 'BTC/USD', exact: true }).click();
   await page.getByText('Bonded quantity cannot be sold').waitFor();
+  assert.equal(await page.locator('dialog[open]').count(), 1);
+  await page.keyboard.press('Escape');
   assert.equal(await page.locator('dialog[open]').count(), 0);
-  await page.getByRole('tab', { name: /Recent fills/ }).click();
+  assert.equal(await page.getByRole('button', { name: 'BTC/USD', exact: true }).evaluate(node => node === document.activeElement), true);
+  await page.getByRole('tab', { name: /Executions/ }).click();
   await page.getByRole('button', { name: /BTC\/USD.*inspect fill/ }).click();
   await page.getByText('0.024 BTC at $62,410').waitFor();
   assert.equal(await page.locator('.performance-canvas').count(), 1);
-  assert.equal(await page.locator('dialog[open]').count(), 0);
+  assert.equal(await page.locator('dialog[open]').count(), 1);
   assert.ok(requests.some(r => r.path.endsWith('/orders/order-42')));
+  await page.keyboard.press('Escape');
   await page.locator('.performance-canvas').hover({ position: { x: 360, y: 160 } });
   await page.locator('.chart-hover').waitFor();
   assert.match(await page.locator('.chart-hover').innerText(), /Portfolio \$[\d,]+\.\d{2}\s*\+[\d.]+%/);
@@ -77,39 +83,46 @@ try {
   const btc = page.getByRole('checkbox', { name: 'BTC', exact: true });
   await btc.uncheck(); assert.equal(await btc.isChecked(), false); await btc.check();
   await page.screenshot({ path: `${artifacts}/desktop.png`, fullPage: true });
+  await page.getByRole('button', { name: /BTC\/USD.*inspect fill/ }).click();
   await page.getByRole('button', { name: 'Decision reasoning ↗' }).click();
   await page.getByText('No path recorded', { exact: true }).waitFor();
-  await page.getByRole('button', { name: 'View audit ↗' }).click();
-  assert.equal(await page.getByRole('tab', { name: 'Events', exact: true }).getAttribute('aria-selected'), 'true');
+  await page.keyboard.press('Escape');
+  await page.getByText('System activity', { exact: true }).click();
+  assert.equal(await page.locator('.system-activity').getAttribute('open'), '');
   await page.locator('.audit-event').first().click();
   await page.getByText('The configured fallback is active while the critic recovers.').waitFor();
-  await page.getByRole('tab', { name: 'Events', exact: true }).focus();
+  await page.keyboard.press('Escape');
+  await page.getByRole('tab', { name: /Executions/ }).focus();
   await page.keyboard.press('Home');
-  assert.equal(await page.getByRole('tab', { name: /Open positions/ }).getAttribute('aria-selected'), 'true');
+  assert.equal(await page.getByRole('tab', { name: /Positions/ }).getAttribute('aria-selected'), 'true');
   await page.getByRole('button', { name: 'Halt trading', exact: true }).click();
   await page.getByText('Halt requested.', { exact: false }).waitFor();
   assert.ok(requests.some(r => r.path.endsWith('/halt') && r.method === 'POST'));
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole('tab', { name: /Recent fills/ }).click();
+  await page.getByRole('tab', { name: /Executions/ }).click();
   await page.getByRole('button', { name: /BTC\/USD.*inspect fill/ }).click();
   await page.screenshot({ path: `${artifacts}/mobile.png`, fullPage: true });
+  await page.getByRole('button', { name: 'Clear selection' }).click();
+  assert.equal(await page.locator('dialog[open]').count(), 0);
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'Mobile page overflows horizontally');
   await page.close();
   console.log('PASS desktop/mobile selection, timeline, curve toggles, audit, keyboard tabs and mocked halt');
 
   for (const kind of ['null', 'partial', 'legacy']) {
     const { page } = await scenario(kind);
-    await page.getByRole('tab', { name: /Latest decisions/ }).click();
+    await page.getByRole('tab', { name: /Strategy decisions/ }).click();
     if (kind === 'partial') {
       await page.locator('.decision-open').first().click();
       await page.getByText('Decision detail is unavailable.').waitFor();
+      await page.keyboard.press('Escape');
     }
-    await page.getByRole('tab', { name: /Recent fills/ }).click();
+    await page.getByRole('tab', { name: /Executions/ }).click();
     if (kind !== 'null') {
       await page.getByRole('button', { name: /BTC\/USD.*inspect fill/ }).click();
+      await page.keyboard.press('Escape');
       await page.getByRole('button', { name: 'Browse fill history' }).click();
     }
-    await page.getByRole('tab', { name: 'Events', exact: true }).click();
+    await page.getByText('System activity', { exact: true }).click();
     await page.screenshot({ path: `${artifacts}/${kind}.png`, fullPage: true });
     const body = await page.locator('body').innerText();
     assert.ok(!body.includes('NaN') && !body.includes('Invalid Date'), `${kind} leaked invalid measurements`);
@@ -118,7 +131,7 @@ try {
   }
   const metrics = await scenario('metrics');
   const metricPage = metrics.page;
-  await metricPage.getByRole('tab', { name: /Recent fills/ }).click();
+  await metricPage.getByRole('tab', { name: /Executions/ }).click();
   const table = metricPage.locator('.fills-table').first();
   await table.getByText('+10.25%', { exact: true }).waitFor();
   const assertReturns = async (asset, pnl, roi) => {
@@ -143,6 +156,7 @@ try {
   await metricPage.locator('.fill-return-summary').getByText('+10.25%', { exact: true }).waitFor();
   await metricPage.locator('.details-content summary').filter({ hasText: /^Fill details$/ }).click();
   assert.match(await metricPage.locator('.details-content').innerText(), /Commission \(reported\)/);
+  await metricPage.keyboard.press('Escape');
   await metricPage.getByRole('button', { name: 'Browse fill history' }).click();
   await metricPage.locator('.fills-table').nth(1).getByText('+10.25%', { exact: true }).waitFor();
   await metricPage.screenshot({ path: `${artifacts}/metrics.png`, fullPage: true });

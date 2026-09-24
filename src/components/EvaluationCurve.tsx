@@ -30,7 +30,7 @@ export function EvaluationCurve({ sessionId, mode, currency, ledger, ledgerAsOf 
   const fitted = useRef(false);
   const [windowDays, setWindowDays] = useState(30);
   const [view, setView] = useState<CurveView>('dollars');
-  const [visible, setVisible] = useState([true, true, false, false]);
+  const [visible, setVisible] = useState([true, false, false, false]);
   const [peerVisible, setPeerVisible] = useState<Record<string, boolean>>({});
   const visibleRef = useRef(visible);
   visibleRef.current = visible;
@@ -114,6 +114,7 @@ export function EvaluationCurve({ sessionId, mode, currency, ledger, ledgerAsOf 
     <div className="chart-view-toggle" role="group" aria-label="Chart units"><button aria-pressed={view === 'dollars'} onClick={() => setView('dollars')}>Value</button><button aria-pressed={view === 'percent'} onClick={() => setView('percent')}>Return</button></div>
     <div className="chart-legend" role="group" aria-label="Visible chart curves">{lines.map(([, label, color], i) => <label key={label} className={`curve-toggle ${visible[i] ? 'is-on' : ''}`} style={{ '--curve-color': color } as CSSProperties}><input type="checkbox" checked={visible[i]} onChange={() => setVisible(v => v.map((x, j) => j === i ? !x : x))} /><span className="curve-check" aria-hidden="true">{visible[i] && <svg viewBox="0 0 12 12"><path d="m2 6 2.5 2.5L10 3" /></svg>}</span>{label}</label>)}</div>
     {!!data?.peers?.length && <div className="chart-legend peer-legend" role="group" aria-label="Visible peer curves">{data.peers.map((peer, i) => <label key={peer.peer_name} className={`curve-toggle peer-toggle ${peerVisible[peer.peer_name] ? 'is-on' : ''}`} style={{ '--curve-color': peer.stale ? '#5f6c78' : peerColors[i % peerColors.length] } as CSSProperties}><input type="checkbox" checked={peerVisible[peer.peer_name] ?? false} onChange={() => setPeerVisible(current => ({ ...current, [peer.peer_name]: !current[peer.peer_name] }))} /><span className="curve-check" aria-hidden="true">{peerVisible[peer.peer_name] && <svg viewBox="0 0 12 12"><path d="m2 6 2.5 2.5L10 3" /></svg>}</span>{peer.peer_name}{peer.stale ? ' · stale' : ''}</label>)}</div>}
+    {data && !data.peers?.length && <p className="chart-message" role="status">Peer curves unavailable for this period. Each live peer will have its own checkbox when comparison data is available.</p>}
     {query.isPending && !book.length && <p className="chart-message">Loading performance…</p>}{query.error && <p className="chart-message" role="status">Comparison unavailable: {query.error.message}</p>}{wrongBook && <p className="chart-message" role="alert">Comparison returned a different book and is hidden.</p>}
     {!query.isPending && !book.length && <p className="chart-message">No measured portfolio curve for this period.</p>}
     {usingLedger && <p className="chart-message">Ledger values only. Return adjustments and comparable benchmarks are unavailable.</p>}

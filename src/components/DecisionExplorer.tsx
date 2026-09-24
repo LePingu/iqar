@@ -83,14 +83,17 @@ function DecisionPathDrawer({ source, selection, onClose, onSelect, inline = fal
 
 export function DetailsExplorer() {
   const context = useDecisions();
-  const panel = useRef<HTMLElement>(null);
+  const panel = useRef<HTMLDialogElement>(null);
+  const hasSelection = !!context?.selection;
   useEffect(() => {
-    if (context?.selection && window.matchMedia('(max-width: 1100px)').matches) panel.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, [context?.selection]);
-  return <section ref={panel} className="details-explorer" aria-label="Details explorer">
-    <div className="widget-heading"><span className="eyebrow">INSPECT</span><h3>Details explorer</h3></div>
-    {context?.selection ? <DecisionPathDrawer inline source={context.source} selection={context.selection} onClose={context.close} onSelect={context.select} /> : <div className="explorer-empty"><span aria-hidden="true">↗</span><h4>A closer look, right here</h4><p>Select a decision, fill or chart marker to follow its story.</p></div>}
-  </section>;
+    const node = panel.current;
+    if (hasSelection) node?.showModal();
+    else node?.close();
+    return () => node?.close();
+  }, [hasSelection]);
+  return <dialog ref={panel} className="decision-drawer details-explorer" aria-label="Selected item details" onCancel={() => context?.close()}>
+    {context?.selection && <DecisionPathDrawer inline source={context.source} selection={context.selection} onClose={context.close} onSelect={context.select} />}
+  </dialog>;
 }
 
 export function DecisionCard({ decision, decisionId, reason, positionId, symbol, children }: {
@@ -136,8 +139,8 @@ export function DecisionBook() {
     const key = tab === 'declined' ? decision.outcome : 'All decisions';
     groups.set(key, [...(groups.get(key) ?? []), decision]);
   }
-  return <GlassCard className="decision-book"><h3 className="section-title">Latest decisions</h3>
-    <div className="decision-toolbar" role="tablist" aria-label="Decision book">{['all', 'declined'].map(value => <button key={value} role="tab" aria-selected={tab === value} className="btn btn-ghost" onClick={() => { setTab(value); setOffset(0); }}>{value === 'all' ? 'All decisions' : 'Declined book'}</button>)}</div>
+  return <GlassCard className="decision-book"><h3 className="section-title">Strategy decisions</h3>
+    <div className="decision-toolbar" role="tablist" aria-label="Decision book">{['all', 'declined'].map(value => <button key={value} role="tab" aria-selected={tab === value} className="btn btn-ghost" onClick={() => { setTab(value); setOffset(0); }}>{value === 'all' ? 'All decisions' : 'Not executed'}</button>)}</div>
     <details className="decision-filters"><summary>Filter decisions</summary><div className="decision-toolbar">
       <label>Symbol<input className="input" value={symbol} onChange={e => { setSymbol(e.target.value); setOffset(0); }} /></label>
       <label>Action<select className="input" value={action} onChange={e => { setAction(e.target.value); setOffset(0); }}><option value="">All</option>{['buy', 'sell', 'hold'].map(a => <option key={a}>{a}</option>)}</select></label>

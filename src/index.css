@@ -1,5 +1,5 @@
 @import "tailwindcss";
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700&family=Roboto+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Raleway:wght@300;400;500;600&family=Roboto+Mono:wght@400;500&display=swap');
 
 /* ================================================================
    Design System — Clean SaaS Dashboard (Option B)
@@ -32,7 +32,7 @@
 
   /* — Typography — */
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
-  --font-display: 'Outfit', 'Inter', sans-serif;
+  --font-display: 'Raleway', 'Inter', sans-serif;
   --font-mono: 'Roboto Mono', ui-monospace, monospace;
 
   /* — Radius — */
@@ -55,7 +55,8 @@
   }
 
   h1, h2, h3, h4, h5, h6 {
-    @apply font-display font-semibold tracking-tight;
+    @apply font-display font-normal;
+    letter-spacing: 0.02em;
   }
 }
 
@@ -266,7 +267,7 @@
 .trading-header, .trading-heading, .header-actions { display: flex; align-items: center; gap: 14px; }
 .trading-header { justify-content: space-between; flex-wrap: wrap; }
 .trading-heading { flex-wrap: wrap; gap: 12px; }
-.trading-heading h1 { font-size: 27px; letter-spacing: -.8px; }
+.trading-heading h1 { font-size: 30px; font-weight: 300; letter-spacing: .035em; }
 .mode-label { padding: 5px 8px; border: 1px solid #ffffff20; border-radius: 5px; font-size: 10px; text-transform: uppercase; letter-spacing: .07em; color: #b7bec5; }
 .mode-label.real { color: #f29a87; background: #f0806610; border-color: #f0806640; }
 .session-label { display: flex; gap: 7px; align-items: center; color: #929ca8; font-size: 11px; }
@@ -285,7 +286,7 @@
 .trading-main, .trading-inspector { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 .performance-panel { padding: 22px 20px 12px; overflow: hidden; }
 .performance-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
-.performance-heading h2 { font-size: 17px; font-weight: 600; }
+.performance-heading h2 { font-size: 20px; font-weight: 400; }
 .performance-return { display: flex; align-items: baseline; flex-wrap: wrap; gap: 12px; margin-top: 9px; }
 .performance-return strong { font-size: 33px; font-weight: 600; letter-spacing: -.8px; font-variant-numeric: tabular-nums; }
 .performance-return > span { color: #a1adbc; font-size: 11px; }
@@ -340,7 +341,7 @@
 .source-chip { color: #93a399; border: 1px solid #ffffff15; padding: 3px 5px; border-radius: 4px; font-size: 10px; }
 .table-hint { color: #798592; font-size: 10px; padding: 18px 10px 4px; }
 .widget-heading { display: flex; align-items: center; gap: 8px; margin-bottom: 18px; }
-.widget-heading h3 { font-size: 15px; }
+.widget-heading h3 { font-size: 18px; font-weight: 400; }
 .telemetry-widget { padding: 20px 18px 14px; }
 .component-health { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 12px; margin-bottom: 16px; }
 .component-health > div { display: flex; align-items: center; gap: 10px; min-width: 0; }
@@ -392,7 +393,7 @@
 @media (max-width: 1100px) { .trading-workspace { grid-template-columns: minmax(0, 1fr); }.trading-inspector { display: grid; grid-template-columns: 1fr 1fr; align-items: start; }.details-explorer { grid-column: 2; grid-row: 1 / span 3; }.portfolio-strip > div { padding-inline: 12px; } }
 @media (max-width: 640px) { .trading-inspector { display: flex; }.portfolio-strip { grid-template-columns: 1fr 1fr; row-gap: 20px; }.portfolio-strip > div:nth-child(even) { border: 0; }.portfolio-strip > div:last-child { grid-column: 1 / -1; }.trading-header { gap: 16px; }.header-actions { width: 100%; justify-content: flex-end; }.trading-heading h1 { font-size: 24px; }.performance-heading { flex-wrap: wrap; }.performance-panel { padding: 16px 12px 12px; }.performance-return strong { font-size: 29px; }.activity-tabs button { padding-inline: 9px; }.activity-tabs svg { display: none; }.explorer-empty { min-height: 180px; } }
 @media (prefers-reduced-motion: reduce) { .live-dashboard *, .live-dashboard *::before, .live-dashboard *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }
-.app-wordmark { color: #d5b563; font-size: 28px; font-weight: 600; letter-spacing: 1px; }
+.app-wordmark { color: #d5b563; font-family: var(--font-display); font-size: 28px; font-weight: 400; letter-spacing: .12em; }
 .selected-fill-heading { padding-right: 20px; }
 .execution-timeline time { float: right; margin-left: 8px; }
 .execution-timeline li { padding-bottom: 18px; }
@@ -407,3 +408,35 @@
 .fill-return-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0; }
 .fill-return-summary dt { font-size: 10px; color: #91a0af; }
 .fill-return-summary dd { margin-top: 4px; font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* Trading overview: full-width content, with diagnostics below the activity. */
+.trading-workspace { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+.trading-inspector { display: flex; flex-direction: column; gap: 16px; }
+.component-health { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.system-activity { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--color-border); }
+.system-activity > summary { cursor: pointer; font-size: 14px; color: var(--color-text-primary); }
+.activity-description { margin: 12px 0 18px; color: #b4bfcb; font-size: 13px; line-height: 1.6; }
+.activity-tabs button, .activity-table, .decision-book .decision-open,
+.activity-filter, .activity-filter select, .decision-filters,
+.workspace-controls > summary, .risk-settings label { font-size: 14px; }
+.activity-table th, .activity-table td { padding: 14px 12px; }
+.activity-table td small, .fills-table td .fill-date, .fills-table td .fill-settlement,
+.decision-book .decision-open time, .decision-book h4, .table-hint,
+.widget-note, .component-health div > div > span, .telemetry-footer,
+.audit-event small, .telemetry-extra { font-size: 12px; color: #aebbc8; }
+.component-health strong, .audit-event strong { font-size: 14px; }
+.activity-filter { flex-wrap: wrap; justify-content: flex-start; }
+.activity-filter label { display: flex; flex-direction: column; gap: 6px; }
+.activity-filter .btn { align-self: end; }
+.details-explorer.decision-drawer { max-width: 100vw; border-radius: 0; padding: 28px; }
+.details-explorer .details-content { max-height: none; overflow: visible; font-size: 14px; }
+.details-explorer .details-content h3, .details-explorer .details-content h4,
+.details-explorer .telemetry-stats, .details-explorer .details-content details,
+.details-explorer .inspector-link, .details-explorer .execution-timeline strong { font-size: 14px; }
+.details-explorer .execution-timeline p, .details-explorer .execution-timeline time,
+.details-explorer .execution-metrics span, .details-explorer .fill-status { font-size: 12px; }
+.details-explorer .explorer-close { min-width: 36px; min-height: 36px; }
+@media (max-width: 640px) {
+  .component-health { grid-template-columns: 1fr 1fr; }
+  .details-explorer.decision-drawer { padding: 20px; }
+}
