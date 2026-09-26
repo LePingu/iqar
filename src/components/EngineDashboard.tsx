@@ -7,7 +7,7 @@ import type { EngineControls, EngineMode, EngineStatus, LiveEngineDetail } from 
 import { formatDate, formatMoney, formatPercentage, formatSignedMoney } from '../utils/trading';
 import { measured, measurement } from '../utils/monitoring';
 import { DecisionProvider } from './DecisionExplorer';
-import { LiveTradingWorkspace } from './LiveTradingWorkspace';
+import { LiveTradingWorkspace, TelemetryWidget } from './LiveTradingWorkspace';
 
 async function optionalSession<T>(read: () => Promise<T>) {
   try { return await read(); } catch (error) {
@@ -79,8 +79,11 @@ function Dashboard({ sessionId, mode }: { sessionId: string; mode: EngineMode })
     {command.error && <p className="monitor-error" role="alert">{command.error.message}</p>}{command.isSuccess && <p className="widget-note" role="status">{command.variables === 'halt' ? 'Halt' : 'Resume'} requested. Awaiting engine status confirmation.</p>}
     {(statusQuery.error || detailQuery.error) && <p className="monitor-error" role="alert">{statusQuery.error?.message ?? detailQuery.error?.message} · Previously loaded data may be stale.</p>}
     {!status && !statusQuery.isPending && !statusQuery.error && <p className="widget-note">No engine status available yet. The workspace will update when the session reports data.</p>}
+    <div className="trading-overview">
     <div className="portfolio-strip" aria-label="Portfolio summary">{metrics.map(([label, value]) => <div key={label}><span>{label}</span><strong className={label === 'P&L' && measured(data?.pnl) ? data.pnl >= 0 ? 'text-positive' : 'text-negative' : ''}>{value}</strong>{label === 'P&L' && <small className={measured(data?.pnl_pct) ? data.pnl_pct >= 0 ? 'text-positive' : 'text-negative' : ''}>ROI {formatPercentage(data?.pnl_pct)}</small>}</div>)}</div>
-    <LiveTradingWorkspace sessionId={sessionId} mode={mode} status={statusQuery.error ? null : status} data={data} dataError={detailQuery.error?.message} currency={currency} settings={<details ref={settings} className="workspace-controls"><summary><FiSettings />Engine settings</summary>{isAdmin ? <RiskSettings key={`${sessionId}-${status?.max_position_size_pct}-${status?.max_daily_loss_pct}-${status?.max_open_positions}`} sessionId={sessionId} status={status} mode={mode} /> : <dl className="telemetry-stats" aria-label="Risk limits"><div><dt>Maximum position</dt><dd>{measured(status?.max_position_size_pct) ? measurement(status.max_position_size_pct * 100, '%') : '—'}</dd></div><div><dt>Daily loss limit</dt><dd>{measured(status?.max_daily_loss_pct) ? measurement(status.max_daily_loss_pct * 100, '%') : '—'}</dd></div><div><dt>Maximum positions</dt><dd>{status?.max_open_positions ?? '—'}</dd></div></dl>}</details>} account={mode === 'real' && isAdmin ? <AccountDetails sessionId={sessionId} data={data} /> : undefined} />
+    <TelemetryWidget sessionId={sessionId} mode={mode} status={statusQuery.error ? null : status} />
+    </div>
+    <LiveTradingWorkspace sessionId={sessionId} mode={mode} data={data} dataError={detailQuery.error?.message} currency={currency} settings={<details ref={settings} className="workspace-controls"><summary><FiSettings />Engine settings</summary>{isAdmin ? <RiskSettings key={`${sessionId}-${status?.max_position_size_pct}-${status?.max_daily_loss_pct}-${status?.max_open_positions}`} sessionId={sessionId} status={status} mode={mode} /> : <dl className="telemetry-stats" aria-label="Risk limits"><div><dt>Maximum position</dt><dd>{measured(status?.max_position_size_pct) ? measurement(status.max_position_size_pct * 100, '%') : '—'}</dd></div><div><dt>Daily loss limit</dt><dd>{measured(status?.max_daily_loss_pct) ? measurement(status.max_daily_loss_pct * 100, '%') : '—'}</dd></div><div><dt>Maximum positions</dt><dd>{status?.max_open_positions ?? '—'}</dd></div></dl>}</details>} account={mode === 'real' && isAdmin ? <AccountDetails sessionId={sessionId} data={data} /> : undefined} />
   </div>;
 }
 

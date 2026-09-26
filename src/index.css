@@ -429,7 +429,7 @@
 .activity-filter { flex-wrap: wrap; justify-content: flex-start; }
 .activity-filter label { display: flex; flex-direction: column; gap: 6px; }
 .activity-filter .btn { align-self: end; }
-.details-explorer.decision-drawer { max-width: 100vw; border-radius: 0; padding: 28px; }
+.details-explorer.decision-drawer { max-width: 100vw; border-radius: 0; padding: 28px; overflow-y: auto; overscroll-behavior-y: contain; }
 .details-explorer .details-content { max-height: none; overflow: visible; font-size: 14px; }
 .details-explorer .details-content h3, .details-explorer .details-content h4,
 .details-explorer .telemetry-stats, .details-explorer .details-content details,
@@ -437,7 +437,19 @@
 .details-explorer .execution-timeline p, .details-explorer .execution-timeline time,
 .details-explorer .execution-metrics span, .details-explorer .fill-status { font-size: 12px; }
 .details-explorer .explorer-close { min-width: 36px; min-height: 36px; }
+.trading-overview { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 18px; align-items: start; }
+.trading-overview > * { min-width: 0; }
+.trading-overview .portfolio-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 24px; padding-block: 24px; align-self: stretch; align-content: center; }
+.trading-overview .portfolio-strip > div:nth-child(3) { border-right: 0; }
+.trading-overview .component-health { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 1100px) {
+  .trading-overview { grid-template-columns: minmax(0, 1fr); }
+  .trading-overview .portfolio-strip { grid-template-columns: 1.4fr 1fr 1fr 1fr .8fr; }
+  .trading-overview .portfolio-strip > div:nth-child(3) { border-right: 1px solid #ffffff13; }
+  .trading-overview .component-health { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
 @media (max-width: 640px) {
-  .component-health { grid-template-columns: 1fr 1fr; }
+  .component-health, .trading-overview .component-health { grid-template-columns: 1fr 1fr; }
+  .trading-overview .portfolio-strip { grid-template-columns: 1fr 1fr; }
   .details-explorer.decision-drawer { padding: 20px; }
 }

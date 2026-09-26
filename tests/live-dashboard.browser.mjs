@@ -65,6 +65,9 @@ async function scenario(kind = 'full', role = 'admin', route = '/live') {
 }
 try {
   const { page, requests } = await scenario();
+  const summaryBox = await page.locator('.portfolio-strip').boundingBox();
+  const healthBox = await page.getByRole('region', { name: 'System health', exact: true }).boundingBox();
+  assert.ok(Math.abs(summaryBox.y - healthBox.y) < 2 && healthBox.x > summaryBox.x + summaryBox.width, 'System health should sit beside the summary');
   assert.equal(await page.getByRole('tab', { name: /Staked \/ blocked/ }).count(), 0);
   assert.equal(await page.locator('dialog[open]').count(), 0);
   assert.equal(await page.getByRole('tab', { name: 'Events', exact: true }).count(), 0);
@@ -161,6 +164,18 @@ try {
   await metricPage.locator('.fill-return-summary').getByText('+10.25%', { exact: true }).waitFor();
   await metricPage.locator('.details-content summary').filter({ hasText: /^Fill details$/ }).click();
   assert.match(await metricPage.locator('.details-content').innerText(), /Commission \(reported\)/);
+  for (const width of [1586, 390]) {
+    await metricPage.setViewportSize({ width, height: 500 });
+    const drawer = metricPage.getByRole('dialog', { name: 'Selected item details' });
+    assert.equal(await drawer.evaluate(node => getComputedStyle(node).overflowY), 'auto');
+    assert.ok(await drawer.evaluate(node => node.scrollHeight > node.clientHeight), 'Expanded details should overflow the short viewport');
+    await drawer.hover();
+    await metricPage.mouse.wheel(0, 800);
+    await metricPage.waitForFunction(() => document.querySelector('dialog[open]').scrollTop > 0);
+    await drawer.evaluate(node => { node.scrollTop = node.scrollHeight; });
+    assert.ok(await drawer.evaluate(node => Math.abs(node.scrollHeight - node.clientHeight - node.scrollTop) <= 1), 'The bottom of expanded details must be reachable');
+  }
+  await metricPage.setViewportSize({ width: 1586, height: 1000 });
   await metricPage.keyboard.press('Escape');
   await metricPage.getByRole('button', { name: 'Browse fill history' }).click();
   await metricPage.locator('.fills-table').nth(1).getByText('+10.25%', { exact: true }).waitFor();

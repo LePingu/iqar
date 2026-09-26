@@ -20,7 +20,7 @@ function Health({ label, value, failed }: { label: string; value?: ComponentHeal
   return <div title={value?.reason ?? undefined}><span className={`health-dot ${state}`} /><div><span>{label}</span><strong>{text}</strong></div></div>;
 }
 
-function TelemetryWidget({ sessionId, status, mode }: { sessionId: string; status?: EngineStatus | null; mode: EngineMode }) {
+export function TelemetryWidget({ sessionId, status, mode }: { sessionId: string; status?: EngineStatus | null; mode: EngineMode }) {
   const context = useDecisions();
   const [activityOpen, setActivityOpen] = useState(false);
   const telemetry = useQuery({ queryKey: ['engineTelemetry', sessionId], queryFn: () => api.getEngineTelemetry(sessionId), refetchInterval: 15_000, retry: false });
@@ -44,8 +44,8 @@ function TelemetryWidget({ sessionId, status, mode }: { sessionId: string; statu
   </section>;
 }
 
-export function LiveTradingWorkspace({ sessionId, status, data, dataError, currency, settings, account, mode }: {
-  sessionId: string; status?: EngineStatus | null; data?: LiveEngineDetail | null; dataError?: string; currency: string;
+export function LiveTradingWorkspace({ sessionId, data, dataError, currency, settings, account, mode }: {
+  sessionId: string; data?: LiveEngineDetail | null; dataError?: string; currency: string;
   settings: ReactNode; account?: ReactNode; mode: EngineMode;
 }) {
   const [tab, setTab] = useState('positions');
@@ -78,8 +78,7 @@ export function LiveTradingWorkspace({ sessionId, status, data, dataError, curre
         </div>
       </section>
     </div>
-    <aside className="trading-inspector" aria-label="System health and settings">
-      <TelemetryWidget sessionId={sessionId} mode={mode} status={status} />
+    <aside className="trading-inspector" aria-label="Engine settings and account">
       {settings}{account}
     </aside>
     <DetailsExplorer />
