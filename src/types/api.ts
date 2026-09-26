@@ -341,6 +341,30 @@ export interface EngineControls {
   max_open_positions?: number | null;
 }
 
+export interface LiquidateRequest {
+  /** Must repeat the session id; supplied by the operator's typed confirmation. */
+  confirm: string;
+  /** Omit to sell engine-owned lots only. Adopted lots must be explicitly named. */
+  position_ids?: number[] | null;
+}
+
+export interface LiquidateAccepted {
+  queued: 'liquidate';
+  session_id: string;
+  by: string;
+  position_ids?: number[] | null;
+}
+
+export interface HeldHolding {
+  symbol: string;
+  reason: 'staked' | 'below_minimum';
+  quantity: number;
+  current_price: number;
+  /** Already included in portfolio_value; does not consume a position slot. */
+  value: number;
+  position_ids: number[];
+}
+
 export interface LiveEngineDetail extends DataFreshness {
   exposure_pct?: number | null;
   mode?: EngineMode;
@@ -356,6 +380,8 @@ export interface LiveEngineDetail extends DataFreshness {
   open_positions_count: number;
   last_snapshot_ts: string | null;
   open_positions: OpenPosition[];
+  /** Real-only, separate from tradeable quantities. Missing on older backends. */
+  held_positions?: HeldHolding[] | null;
   recent_fills: LiveFill[];
   equity_curve: EquityPoint[];
 }

@@ -918,6 +918,78 @@ paths:
         '404':
           description: Session not found
 
+  /api/engine/{session_id}/liquidate:
+    post:
+      tags:
+        - Engine
+      summary: The red button — halt, then sell the selected lots
+      description: |
+        Inserts a ``liquidate`` row into ``engine_commands``. Within one poll
+        interval (about 5 seconds, not a full cycle) the engine **halts**
+        (``trading_enabled`` → false, in the same transaction), drops any queued
+        re-entry orders, and market-sells the selected lots — one order per
+        symbol, booked per lot with exit reason ``operator_liquidation``.
+
+        * ``position_ids`` omitted → every lot the engine bought itself.
+          Holdings adopted from the account (coins held before the engine ran)
+          are sold **only when named**.
+        * A bonded (staked) quantity cannot be sold without unstaking on the
+          exchange first: it is reported and left open, never retried. A lot
+          that is partly bonded sells its free part.
+        * A refused sale is retried on the next polls, three submissions in all,
+          then reported.
+        * The engine stays running and halted afterwards. ``resume`` cancels
+          whatever is still unsold.
+
+        Works on paper and real sessions alike. 200 means **requested**. The
+        outcome is the engine's ``Liquidation finished: N sold, M not sold``
+        event on ``GET /api/engine/{session_id}/events`` (``critical`` when
+        anything was left unsold), whose ``detail`` names each unsold lot and
+        why. Operator-gated (``can_control``). The frontend should make the
+        operator type the session id into ``confirm``.
+      parameters:
+        - in: path
+          name: session_id
+          required: true
+          schema:
+            type: string
+          example: live-real
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LiquidateRequest'
+      responses:
+        '200':
+          description: Liquidation queued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  queued:
+                    type: string
+                    example: liquidate
+                  session_id:
+                    type: string
+                  by:
+                    type: string
+                    description: Operator email that pressed the button
+                  position_ids:
+                    type: array
+                    nullable: true
+                    items:
+                      type: integer
+        '400':
+          description: "``confirm`` does not repeat the session id — nothing queued"
+        '403':
+          description: Caller is not an operator (can_control=false)
+        '404':
+          description: Session not found
+        '422':
+          description: "``position_ids`` is an empty list (omit it to sell every engine lot)"
+
   /api/engine/{session_id}/controls:
     put:
       tags:
@@ -1695,6 +1767,28 @@ components:
           nullable: true
           description: Hard cap on simultaneously open positions
 
+    LiquidateRequest:
+      type: object
+      description: |
+        Body of ``POST /api/engine/{session_id}/liquidate``. ``confirm`` must
+        repeat the session id — a typed confirmation, so a stray click or a
+        request meant for the other engine cannot sell a book.
+      required:
+        - confirm
+      properties:
+        confirm:
+          type: string
+          example: live-real
+        position_ids:
+          type: array
+          nullable: true
+          minItems: 1
+          items:
+            type: integer
+          description: |
+            Lots to sell. Omitted → every lot the engine bought itself; adopted
+            holdings are sold only when named here.
+
     LiveEngineDetail:
       type: object
       description: |
@@ -1765,13 +1859,28 @@ components:
           type: number
         open_positions_count:
           type: integer
+          description: |
+            Lots the engine trades — the count that fills ``max_open_positions``.
+            Holdings in ``held_positions`` are not included.
         last_snapshot_ts:
           type: string
           nullable: true
         open_positions:
           type: array
+          description: |
+            The lots the engine trades. ``quantity`` is the tradeable quantity:
+            when part of a lot is staked, that part is listed in
+            ``held_positions`` instead, so every coin appears exactly once.
           items:
             $ref: '#/components/schemas/OpenPosition'
+        held_positions:
+          type: array
+          description: |
+            Coins the account holds but the engine does not trade — show them in
+            their own section, apart from the lots. Real sessions only; always
+            empty on paper.
+          items:
+            $ref: '#/components/schemas/HeldHolding'
         recent_fills:
           type: array
           items:
@@ -1780,6 +1889,37 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/EquityPoint'
+
+    HeldHolding:
+      type: object
+      description: |
+        Held, not traded — one row per symbol and reason. Counted in
+        ``portfolio_value``; takes no position slot; gets no exits.
+      required: [symbol, reason, quantity, current_price, value, position_ids]
+      properties:
+        symbol:
+          type: string
+          example: XTZUSD
+        reason:
+          type: string
+          enum: [staked, below_minimum]
+          description: |
+            ``staked`` — bonded on the exchange; unstake it there to make it
+            sellable. ``below_minimum`` — a balance the engine adopted from the
+            account that is smaller than the venue's minimum order (e.g. reward
+            dust), so no sale can move it.
+        quantity:
+          type: number
+        current_price:
+          type: number
+        value:
+          type: number
+          description: quantity × current_price, in the session currency
+        position_ids:
+          type: array
+          items:
+            type: integer
+          description: The lots this row is drawn from
 
     SystemStatus:
       type: object

@@ -21,6 +21,10 @@ const metricFills = [
   { ...fill, id: 49, symbol: 'ROI/USD', side: 'SELL', realized_pnl: null, realized_pnl_pct: 3.5 },
 ];
 const position = { position_id: 7, symbol: 'BTC/USD', side: 'BUY', quantity: .024, entry_price: 62410, current_price: 63800, unrealized_pnl_pct: 2.23, trailing_stop_active: true, basis_source: 'traded', protection: { allocation_pct: 12, executable: false, reason: 'Bonded quantity cannot be sold', free_quantity: 0, bonded_quantity: .024, effective_stop_price: 61200 } };
+const held = [
+  { symbol: 'BTC/USD', reason: 'staked', quantity: .01, current_price: 63800, value: 638, position_ids: [7] },
+  { symbol: 'BTC/USD', reason: 'below_minimum', quantity: .00000001, current_price: 63800, value: .000638, position_ids: [8] },
+];
 const decision = { decision_id: 'decision-42', decided_at: asOf, symbol: 'BTC/USD', action: 'buy', confidence: .82, position_size: 1500, executed: true, outcome: 'filled', price: 62410, reasoning: 'Trend and risk checks passed.' };
 const event = { id: 'incident-1', occurred_at: asOf, severity: 'warning', title: 'Critic unavailable — fallback active', detail: 'The configured fallback is active while the critic recovers.', order_id: 'order-42' };
 const errors = [];
@@ -45,7 +49,7 @@ async function scenario(kind = 'full', role = 'admin', route = '/live') {
       if (kind === 'partial') return json({ components: { engine: null, critic: null }, incidents: null, reconciliation: null, arming: null });
       return json({ mode, as_of: asOf, stale_after_seconds: 60, components: { engine: { state: 'healthy', label: 'Online' }, market_data: { state: 'healthy', label: 'Fresh' }, exchange: { state: 'healthy', label: 'Connected' }, critic: { state: 'degraded', label: 'Fallback' } }, last_cycle_at: asOf, cycle_duration_ms: 840, active_event_count: 1, incidents: [event] });
     }
-    if (path.endsWith('/detail')) return json(kind === 'partial' ? { mode, open_positions: [null, { ...position, quantity: null, entry_price: null, current_price: null, unrealized_pnl_pct: null, protection: null }], recent_fills: [null, { ...fill, price: null, quantity: null, timestamp: null, execution_quality: null }], portfolio_value: null, pnl_pct: null, drawdown_pct: null, exposure_pct: null, equity_curve: null } : { mode, currency: 'USD', portfolio_value: 104280, pnl: 4280, pnl_pct: 4.28, drawdown_pct: -1.12, exposure_pct: 38, open_positions_count: 1, last_snapshot_ts: asOf, open_positions: [position], recent_fills: kind === 'metrics' ? metricFills : [fill], equity_curve: points.map(p => ({ time: Math.floor(Date.parse(p.timestamp) / 1000), capital: p.value, roi_pct: p.index - 100 })) });
+    if (path.endsWith('/detail')) return json(kind === 'partial' ? { mode, open_positions: [null, { ...position, quantity: null, entry_price: null, current_price: null, unrealized_pnl_pct: null, protection: null }], recent_fills: [null, { ...fill, price: null, quantity: null, timestamp: null, execution_quality: null }], portfolio_value: null, pnl_pct: null, drawdown_pct: null, exposure_pct: null, equity_curve: null } : { mode, currency: 'USD', portfolio_value: 104280, pnl: 4280, pnl_pct: 4.28, drawdown_pct: -1.12, exposure_pct: 38, open_positions_count: 1, last_snapshot_ts: asOf, open_positions: [position], held_positions: kind === 'legacy' ? undefined : mode === 'real' && kind !== 'empty-held' ? held : [], recent_fills: kind === 'metrics' ? metricFills : [fill], equity_curve: points.map(p => ({ time: Math.floor(Date.parse(p.timestamp) / 1000), capital: p.value, roi_pct: p.index - 100 })) });
     if (path.endsWith('/curves')) return json(kind === 'partial' ? { mode, equity: null, markers: null, notes: null, btc: null, equal_weight: null } : kind === 'legacy' ? null : { mode, equity: points, btc: points.map((p, i) => ({ ...p, index: 100 + i / 60 })), equal_weight: [], exposure_matched: [], anchor: points[0].timestamp, as_of: asOf, net_of_fees: true, cash_flow_adjusted: true, markers: [{ timestamp: points[90].timestamp, symbol: 'BTC/USD', side: 'BUY', book_index: points[90].index, decision_id: 'decision-42' }] });
     if (path.includes('/orders/')) return json(kind === 'partial' ? { order_id: 'order-42', quality: null, events: null } : { order_id: 'order-42', status: 'filled', quality: fill.execution_quality, events: ['decision_created', 'risk_approved', 'submitted', 'acknowledged', 'filled'].map((stage, i) => ({ id: String(i), stage, occurred_at: asOf, detail: stage === 'filled' ? '0.024 BTC at $62,410' : null })) });
     if (path.endsWith('/decisions')) return json({ total_matching: 1, decisions: [{ ...decision, ...(kind === 'partial' ? { action: null, outcome: null, confidence: null, price: null } : {}) }] });
@@ -61,6 +65,7 @@ async function scenario(kind = 'full', role = 'admin', route = '/live') {
 }
 try {
   const { page, requests } = await scenario();
+  assert.equal(await page.getByRole('tab', { name: /Staked \/ blocked/ }).count(), 0);
   assert.equal(await page.locator('dialog[open]').count(), 0);
   assert.equal(await page.getByRole('tab', { name: 'Events', exact: true }).count(), 0);
   await page.getByRole('button', { name: 'BTC/USD', exact: true }).click();
@@ -175,7 +180,27 @@ try {
   const real = await scenario('full', 'admin', '/live/real');
   await real.page.getByText('Real money', { exact: true }).last().waitFor();
   assert.equal(await real.page.locator('.performance-canvas').count(), 1);
+  assert.match(await real.page.getByRole('tab').last().innerText(), /Staked \/ blocked/);
+  await real.page.getByRole('tab', { name: /Positions/ }).focus();
+  await real.page.keyboard.press('End');
+  assert.equal(await real.page.getByRole('tab', { name: /Staked \/ blocked/ }).getAttribute('aria-selected'), 'true');
+  const heldTable = real.page.locator('.held-holdings-table');
+  assert.equal(await heldTable.locator('tbody tr').count(), 2);
+  await heldTable.getByText('$638.00', { exact: true }).waitFor();
+  await heldTable.getByText('0.0000000100', { exact: true }).waitFor();
+  await heldTable.getByText('Below minimum', { exact: true }).waitFor();
+  await real.page.locator('.portfolio-strip').getByText('$104,280.00', { exact: true }).waitFor();
+  await real.page.screenshot({ path: `${artifacts}/held-holdings.png`, fullPage: true });
+  await real.page.setViewportSize({ width: 390, height: 844 });
+  assert.ok(await real.page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'Held tab overflows mobile page');
   await real.page.close();
+  for (const kind of ['legacy', 'empty-held', 'null']) {
+    const heldState = await scenario(kind, 'admin', '/live/real');
+    await heldState.page.getByRole('tab', { name: /Staked \/ blocked/ }).click();
+    await heldState.page.getByText(kind === 'empty-held' ? 'No staked or blocked holdings.' : 'Staked / blocked holdings data is unavailable.', { exact: true }).waitFor();
+    await heldState.page.close();
+  }
+  console.log('PASS held holdings: separate reasons, final real-only tab, keyboard navigation, unchanged totals, mobile, empty and unavailable states');
   const mismatch = await scenario('mismatch', 'admin', '/live/real');
   await mismatch.page.getByRole('alert').filter({ hasText: 'Wrong book' }).waitFor();
   assert.equal(await mismatch.page.locator('.performance-canvas').count(), 0);

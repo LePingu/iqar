@@ -17,6 +17,8 @@ import type {
   LiveBacktestDetail,
   EngineStatus,
   EngineControls,
+  LiquidateRequest,
+  LiquidateAccepted,
   LiveEngineDetail,
   RealAccountStatus,
   EvaluationReportResponse,
@@ -208,6 +210,14 @@ export const api = {
   resumeEngine: (sessionId: string) =>
     fetchJson<{ queued: string; session_id: string }>(`/engine/${sessionId}/resume`, {
       method: 'POST',
+    }),
+
+  // Acceptance only: the final outcome is reported in the engine events feed.
+  liquidateEngine: (sessionId: string, request: LiquidateRequest) =>
+    fetchJson<LiquidateAccepted>(`/engine/${encodeURIComponent(sessionId)}/liquidate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
     }),
 
   updateEngineControls: (sessionId: string, controls: EngineControls) =>

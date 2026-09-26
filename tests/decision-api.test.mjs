@@ -5,6 +5,27 @@ import { api } from '../src/services/api.ts';
 const originalFetch = globalThis.fetch;
 afterEach(() => { globalThis.fetch = originalFetch; });
 
+test('liquidation preserves typed confirmation and explicit lot selection; acceptance is only queued', async () => {
+  const requests = [];
+  globalThis.fetch = async (url, options) => {
+    requests.push({ url, options });
+    return Response.json({ queued: 'liquidate', session_id: 'live/real', by: 'operator@example.com' });
+  };
+  const result = await api.liquidateEngine('live/real', { confirm: 'live/real', position_ids: [7, 8] });
+  assert.equal(requests[0].url, '/api/engine/live%2Freal/liquidate');
+  assert.equal(requests[0].options.method, 'POST');
+  assert.deepEqual(JSON.parse(requests[0].options.body), { confirm: 'live/real', position_ids: [7, 8] });
+  assert.equal(result.queued, 'liquidate');
+  await api.liquidateEngine('live-paper', { confirm: 'live-paper' });
+  assert.deepEqual(JSON.parse(requests[1].options.body), { confirm: 'live-paper' });
+});
+
+test('engine detail keeps tradeable and held quantities separate without altering totals', async () => {
+  const detail = { portfolio_value: 1000, open_positions_count: 1, open_positions: [{ symbol: 'SOLUSD', quantity: 2 }], held_positions: [{ symbol: 'SOLUSD', reason: 'staked', quantity: 3, current_price: 100, value: 300, position_ids: [7] }] };
+  capture(detail);
+  assert.deepEqual(await api.getEngineDetail('live-real'), detail);
+});
+
 function capture(payload = {}) {
   const urls = [];
   globalThis.fetch = async url => { urls.push(new URL(url, 'http://localhost')); return Response.json(payload); };

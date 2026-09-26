@@ -333,6 +333,7 @@
 .activity-table th { text-align: left; padding: 13px 10px; font-weight: 400; color: #8c98a6; }
 .activity-table td { padding: 12px 10px; border-top: 1px solid #ffffff08; font-variant-numeric: tabular-nums; }
 .activity-table tr { cursor: pointer; }
+.held-holdings-table tr { cursor: default; }
 .activity-table tr:hover { background: #ffffff04; }
 .activity-table tr.is-selected, .audit-event.is-selected { background: #d5b56318; box-shadow: inset 3px 0 #d5b563; }
 .activity-table td small { display: block; color: #d5b563; font-size: 9px; }

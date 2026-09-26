@@ -1,12 +1,13 @@
 import { useId, useState } from 'react';
 import type { ReactNode, KeyboardEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { FiActivity, FiLayers, FiList, FiAlertCircle } from 'react-icons/fi';
+import { FiActivity, FiLayers, FiList, FiAlertCircle, FiLock } from 'react-icons/fi';
 import { api } from '../services/api';
 import type { EngineStatus, LiveEngineDetail, EngineMode, ComponentHealth } from '../types/api';
 import { EvaluationCurve } from './EvaluationCurve';
 import { DecisionBook, DetailsExplorer, useDecisions } from './DecisionExplorer';
 import { OpenPositionsTable } from './OpenPositionsTable';
+import { HeldHoldingsTable } from './HeldHoldingsTable';
 import { FillHistory } from './FillHistory';
 import { FillsTable, AuditEvents } from './LiveActivity';
 import { formatDate } from '../utils/trading';
@@ -50,6 +51,7 @@ export function LiveTradingWorkspace({ sessionId, status, data, dataError, curre
   const [tab, setTab] = useState('positions');
   const id = useId();
   const tabs = [{ id: 'positions', label: 'Positions', icon: FiLayers, count: data?.open_positions_count }, { id: 'fills', label: 'Executions', icon: FiList, count: data?.recent_fills?.length }, { id: 'decisions', label: 'Strategy decisions', icon: FiActivity }];
+  if (mode === 'real') tabs.push({ id: 'held', label: 'Staked / blocked', icon: FiLock, count: data?.held_positions == null ? undefined : rows(data.held_positions).length });
   const navigateTabs = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
     let next = index;
     if (event.key === 'ArrowRight') next = (index + 1) % tabs.length;
@@ -67,11 +69,12 @@ export function LiveTradingWorkspace({ sessionId, status, data, dataError, curre
       <section className="activity-panel">
         <div className="activity-tabs" role="tablist" aria-label="Trading activity">{tabs.map((item, index) => <button key={item.id} id={`${id}-${item.id}`} role="tab" aria-selected={tab === item.id} aria-controls={`${id}-${item.id}-panel`} tabIndex={tab === item.id ? 0 : -1} onClick={() => setTab(item.id)} onKeyDown={event => navigateTabs(event, index)}><item.icon size={14} />{item.label}{item.count != null && <span>{item.count}</span>}</button>)}</div>
         <div className="activity-content">
-          <p className="activity-description">{tab === 'positions' ? 'Current holdings and their performance. Select a position for details.' : tab === 'decisions' ? 'Strategy choices to buy, sell, or hold, including choices that did not execute.' : 'Recorded executions. Select one to see fees, execution quality, and decision reasoning.'}</p>
-          {dataError && (tab === 'positions' || tab === 'fills') && <p className="monitor-error">Refresh failed. Displayed activity may be stale.</p>}
+          <p className="activity-description">{tab === 'held' ? 'Held coins are included in portfolio value. They take no position slots and receive no engine exits.' : tab === 'positions' ? 'Tradeable lots and their performance. Select a position for details.' : tab === 'decisions' ? 'Strategy choices to buy, sell, or hold, including choices that did not execute.' : 'Recorded executions. Select one to see fees, execution quality, and decision reasoning.'}</p>
+          {dataError && (tab === 'positions' || tab === 'fills' || tab === 'held') && <p className="monitor-error">Refresh failed. Displayed activity may be stale.</p>}
           <div role="tabpanel" id={`${id}-positions-panel`} aria-labelledby={`${id}-positions`} hidden={tab !== 'positions'} tabIndex={0}>{tab === 'positions' && (data?.open_positions == null ? <p className="activity-empty">Position data is unavailable.</p> : <OpenPositionsTable positions={rows(data.open_positions)} />)}</div>
           <div role="tabpanel" id={`${id}-decisions-panel`} aria-labelledby={`${id}-decisions`} hidden={tab !== 'decisions'} tabIndex={0}>{tab === 'decisions' && <DecisionBook />}</div>
           <div role="tabpanel" id={`${id}-fills-panel`} aria-labelledby={`${id}-fills`} hidden={tab !== 'fills'} tabIndex={0}>{tab === 'fills' && <><FillsTable fills={data?.recent_fills ?? null} currency={currency} /><FillHistory sessionId={sessionId} currency={currency} /></>}</div>
+          {mode === 'real' && <div role="tabpanel" id={`${id}-held-panel`} aria-labelledby={`${id}-held`} hidden={tab !== 'held'} tabIndex={0}>{tab === 'held' && <HeldHoldingsTable holdings={data?.held_positions} currency={currency} />}</div>}
         </div>
       </section>
     </div>
