@@ -170,6 +170,7 @@ endpoints for the engine):
 - `POST /api/engine/{session_id}/halt` — disable trading (operator-only; 403 for viewers)
 - `POST /api/engine/{session_id}/resume` — re-enable trading (operator-only)
 - `PUT /api/engine/{session_id}/controls` — update risk limits without restart (operator-only)
+- `POST /api/engine/{session_id}/liquidate` — the red button: halt, then sell the selected lots (operator-only). Body (`LiquidateRequest`) and outcome are in `openapi.yaml`: make the operator type the session id into `confirm`, and read the result from the `Liquidation finished` event. **Not built in the frontend yet** (operator review, 30 Sep); it belongs in the control panel beside `HaltButton`.
 
 > **View vs control — how to gate the UI.** Do **NOT** keep an email list in the
 > frontend. Call `GET /api/auth/me` on load; it returns `{ email, can_control }`
@@ -495,9 +496,12 @@ Also surface, because each is a finding rather than a statistic:
   footnote; the per-check detail is in `payload.checks` as `{name, passed,
   detail}`. These catch things like the position cap being breached or
   `realized_pnl` never being written.
-- **`payload.discontinuities`** — book rebuilds inside the window (cash moved
-  with no fill behind it). When present, say plainly that measurement starts
-  *after* the last one, because a return read across a rebuild is meaningless.
+- **`payload.discontinuities`** — money that entered or left the book without a
+  trade. `kind: "cash_move"` is cash moving with no fill behind it (a rebuild,
+  or a fiat deposit/withdrawal); `kind: "holding_arrived"` is a coin the engine
+  did not buy appearing with no fill (a deposit — it also carries `symbol` and
+  `value`). When present, say plainly that measurement starts *after* the last
+  one, because a return read across a rebuild or deposit is meaningless.
 - **`payload.exposure_ceiling_pct`** — max slots × typical lot, as a share of the
   book. Below ~100% the engine physically cannot deploy its cash; worth a warning
   chip when it is low.
@@ -532,11 +536,22 @@ click) and *is the book ahead of just holding?* (overlays on the curve).
 - `GET /api/oracle/{session_id}/decisions` (live sessions) and
   `GET /api/backtests/{run_id}/decisions` (runs) → `DecisionsResponse`, newest first,
   paged (`limit` ≤ 500). Filters: `symbol`, `action` (buy|sell|hold), `executed`
-  (true|false), `outcome`, `since`, `until`. **Every decision the orchestrator produced is a
-  row, executed or not** — `executed=false` is the book of what was declined.
-- `GET …/decisions/{decision_id}` → `DecisionDetail`: the summary, the typed `context`
-  (the full path), `features`, and the `opened_lots` / `closed_lots` / `fills` that point back
-  at this decision. On a run, `mode` is `"backtest"` and `trace_files` is empty.
+  (true|false), `outcome`, `since`, `until`. Every successfully stored
+  orchestrator decision is a row, executed or not; decision-write failures are
+  logged and counted but cannot be recovered from this API. `executed=false`
+  is the book of recorded declines.
+- `GET /api/oracle/{session_id}/evaluations` → `EvaluationGateResponse`, newest first,
+  paged (`limit` ≤ 500), with optional `since` / `until`. Each row gives the exact stored
+  evaluator verdict and state: selected reason, concurrent triggers, CUSUM readiness and
+  progress. Requested decisions and hourly quiet checkpoints are included; quiet rows are
+  sampled, not every unevaluated tick. Read-only and oracle-audited.
+- `GET …/decisions/{decision_id}` → `DecisionDetail`: the summary, typed `context`,
+  `features`, optional `evaluation`, and linked `opened_lots` / `closed_lots` / `fills`.
+  `evaluation` is joined by session and exact cycle timestamp; null when no gate
+  event was stored (older engine, audit off, write failure) and on backtests.
+  The context covers recorded decision inputs and adjustments, not every
+  upstream source or engine constraint. On a run, `mode` is
+  `"backtest"` and `trace_files` is empty.
 - Lots and fills now carry the link: `OracleLot.entry_decision_id` / `exit_decision_id`,
   `OracleFill.decision_id` (all nullable — see *Semantics*).
 
@@ -555,16 +570,28 @@ click) and *is the book ahead of just holding?* (overlays on the curve).
   `critic_reason_code`, `ml_p_profit`, `pm_signal`, MTF choppy, `position_size` vs
   `resolved_size`. Hovering a card highlights its marker on the curve and vice-versa
   (shared `decision_id`).
-- `DecisionPathDrawer` opens on **click** and renders `DecisionDetail.context` as a vertical
-  timeline in this order: `regime` → `signals` (pattern / sentiment / correlation / risk,
-  consensus, weights) → `mtf` → `critic` (verdict, reason, `clamped`) →
-  `position_manager` (raw size, `kelly_info`) → `adjustments[]` as a step list
-  (`sell_critic`, `critic_modulate`, `confidence_floor`, `size_scale`; show `fired`, and
-  size/confidence before → after) → the engine's `outcome` + `outcome_detail` → the linked
-  lots and fills. Marker with `decision_id: null` = a mechanical exit (stop / trail /
-  force-close): open the lot's lineage instead, headed by `exit_reason`.
+- `DecisionPathDrawer` opens on **click** and begins with `DecisionDetail.evaluation`:
+  selected trigger, all concurrent triggers, detector readiness and elapsed time. A null
+  evaluation shows "gate history unavailable". Group `DecisionDetail.context` in
+  actual graph order: portfolio `regime` → pattern analysis (`mtf`, ML probability,
+  early `critic` verdict/reason/clamp) → sentiment → correlation → risk →
+  `position_manager` (proposal, `kelly_info`) → execution decision (`signals`,
+  consensus/weights, `adjustments[]` with `fired` and size/confidence before → after)
+  → engine `outcome` + `outcome_detail` → linked lots and fills. The critic runs
+  inside pattern analysis before the later sentiment/correlation/risk nodes; its
+  verdict cannot be presented as a review of their final values or the order.
+  Context fields are a stored snapshot, not per-node timestamps or source-health
+  proof. Mark unrecorded precompute/node status as unknown. Marker with
+  `decision_id: null` = a mechanical exit (stop / trail / force-close): open
+  the lot's lineage instead, headed by `exit_reason`.
 - `DeclinedBook` tab on the live dashboard: `executed=false`, grouped by `outcome` — what the
-  engine did not buy, and which gate said no. This is half of what entry skill means.
+  engine did not buy, and which first gate said no. This is half of what entry skill means.
+- A separate gate-history strip uses `/api/oracle/{session_id}/evaluations`, displaying
+  requested decisions and quiet checkpoints. Load a bounded recent page first, then older
+  pages on demand. Collapse long reasons in the card while preserving the full text in
+  detail. Label gaps between hourly quiet checkpoints as "not sampled", not "no drift".
+  An empty history is "no gate events recorded", not proof that the evaluator held:
+  audit can be disabled, a write can fail, or the engine may predate this record.
 
 **Semantics — read before rendering**
 
@@ -573,8 +600,9 @@ click) and *is the book ahead of just holding?* (overlays on the curve).
   `refused_before_rotation`, `gate_extension`, `gate_governor`, `no_order`, `guard_blocked`,
   `not_filled`, `no_lots_to_close`, `sell_bypassed_trend_up`, `sell_suppressed_protected`,
   `sell_not_filled`. Chip colour by family: executed / declined-by-gate / hold / not-filled.
-- `context: null` means the decision was recorded before the path existed (or replayed from
-  an old file): show "no path recorded", not an empty timeline.
+- `context: null` means no typed path was attached. This includes old/replayed
+  records and fallback HOLDs after workflow failure; use the decision reasoning
+  to distinguish them. Show "path unavailable", not an empty timeline.
 - `decided_at` is the engine's clock — bar time on a run, wall clock live — not the fill time.
 - **Null is not zero, anywhere in these payloads** (same rule as §G). `regime_weight: null`
   means the legacy hard gate was in force; `price: null` means the engine had no price.
@@ -725,6 +753,24 @@ Each entry: date · what a frontend agent must do · where it is specified. `ope
 beside this file contains the schemas. Entries marked `x-implementation-status:
 requested` are pending backend work; `GET /openapi.json` on a running tower reports
 what that deployment actually serves.
+
+### 2026-09-28 — measurement fixes: deposits, drawdown, silent engine
+
+- **`discontinuities[].kind`** (evaluation reports and `EvaluationCurves`):
+  `cash_move` (the existing shape) or `holding_arrived` (new: a coin deposit,
+  with `symbol` and `value`). Render both as "measurement restarts here". The
+  real book's daily report had been scoring an XRP deposit as +18.8pp alpha.
+- **`LiveEngineDetail.drawdown_pct`** now means the max drawdown of the *current*
+  book — from the last rebuild or deposit, unpriced snapshots skipped — not
+  since the session's first snapshot (which read a book reset as a 23% loss).
+  Same field, same units; the label "max drawdown" stays correct.
+- **New incident**: `category: lifecycle`, `dedupe_key: engine_silent`,
+  `actor: tower`, `severity: critical`, title "Engine silent: no snapshot
+  written". Written by the tower (not the engine) when a session writes no
+  snapshot for 15 minutes; resolved in place when snapshots resume. It arrives
+  through the existing events/telemetry reads — show it like any active incident.
+- **Benchmark**: 30-day curves no longer drop coins first seen by a shorter
+  window, so `unavailable` should shrink to coins the venue genuinely lacks.
 
 ### 2026-09-21 (later) — peer bot comparison: backend implemented, views requested
 

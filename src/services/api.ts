@@ -35,6 +35,7 @@ import type {
   LogTailResponse,
   PaginatedLiveFills,
   DecisionDetail,
+  EvaluationGateResponse,
   DecisionsResponse,
   DecisionSource,
   TradeSide,
@@ -116,6 +117,13 @@ export const api = {
       if (value != null && value !== '') params.set(key, String(value));
     });
     return fetchJson<DecisionsResponse>(`${decisionBase(source)}?${params}`);
+  },
+  getEvaluationGates: (sessionId: string, filters: { since?: string; until?: string; limit?: number; offset?: number } = {}) => {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value != null && value !== '') params.set(key, String(value));
+    });
+    return fetchJson<EvaluationGateResponse>(`/oracle/${encodeURIComponent(sessionId)}/evaluations?${params}`);
   },
   getDecision: (source: DecisionSource, decisionId: string) =>
     fetchJson<DecisionDetail>(`${decisionBase(source)}/${encodeURIComponent(decisionId)}`),

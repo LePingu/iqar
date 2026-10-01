@@ -1,3 +1,4 @@
+import { GateDetails, RecordedPath, RecordedFields as Fields } from './DecisionTrace';
 import { InspectionDetails } from './InspectionDetails';
 import { rows, humanize, measurement } from '../utils/monitoring';
 import { formatDate, fmtPrice } from '../utils/trading';
@@ -15,14 +16,6 @@ const DecisionContext = createContext<{
 // Shared by cards and chart markers within a single run or session.
 // eslint-disable-next-line react-refresh/only-export-components
 export const useDecisions = () => useContext(DecisionContext);
-const display = (value: unknown): string => value == null ? 'Not recorded' : typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value);
-
-function Fields({ value }: { value: unknown }) {
-  if (value == null) return <p>Not recorded</p>;
-  if (typeof value !== 'object') return <p>{display(value)}</p>;
-  return <dl className="decision-fields">{Object.entries(value).map(([key, item]) => <div key={key}><dt>{humanize(key)}</dt><dd>{display(item)}</dd></div>)}</dl>;
-}
-
 export function DecisionProvider({ source, children, inline = false }: { source: DecisionSource; children: ReactNode; inline?: boolean }) {
   const [highlighted, highlight] = useState<string | null>(null);
   const [selection, select] = useState<DecisionSelection | null>(null);
@@ -48,25 +41,23 @@ function DecisionPathDrawer({ source, selection, onClose, onSelect, inline = fal
     enabled: source.kind === 'session' && selection.kind === 'mechanical' && selection.positionId != null,
   });
   useEffect(() => { const node = dialog.current; node?.showModal(); return () => node?.close(); }, []);
-  if (selection.kind !== 'decision' && selection.kind !== 'mechanical') return <InspectionDetails source={source} selection={selection} onClose={onClose} onSelect={onSelect} />;
+  if (selection.kind !== 'decision' && selection.kind !== 'mechanical' && selection.kind !== 'evaluation') return <InspectionDetails source={source} selection={selection} onClose={onClose} onSelect={onSelect} />;
   const data = detail.data;
   const decision = data?.decision;
   const content = <>
     <button className="explorer-close" onClick={onClose} aria-label="Clear selection">×</button>
-    <h2 id="decision-title">{selection.kind === 'mechanical' ? selection.reason ?? 'No linked decision' : 'Decision path'}</h2>
-    {selection.kind === 'decision' ? <>
+    <h2 id="decision-title">{selection.kind === 'mechanical' ? selection.reason ?? 'No linked decision' : selection.kind === 'evaluation' ? 'Gate history detail' : 'Decision path'}</h2>
+    {selection.kind === 'evaluation' ? <GateDetails evaluation={selection.evaluation} /> : selection.kind === 'decision' ? <>
       {detail.isPending && <p>Loading decision…</p>}
       {detail.error && <p role="alert">{detail.error.message}</p>}
       {!detail.isPending && !detail.error && !decision && <p>Decision detail is unavailable.</p>}
       {data && decision && <>
+        <GateDetails evaluation={data.evaluation} />
         <h3>{decision.symbol} · {humanize(decision.action)}</h3><span className="fill-status">{humanize(decision.outcome)}</span>
         <p>{formatDate(decision.decided_at)} · engine decision time</p>
         <p>{decision.reasoning}</p>
         <details><summary>Decision metrics & signals</summary><Fields value={decision} /></details>
-        {!data.context ? <p>No path recorded</p> : <ol className="decision-timeline">
-          {['regime', 'signals', 'mtf', 'critic', 'position_manager'].map(key => <li key={key}><details><summary>{humanize(key)}</summary><Fields value={data.context?.[key]} /></details></li>)}
-          <li><h3>Adjustments</h3>{data.context.adjustments?.length ? rows(data.context.adjustments).map((step, i) => <Fields key={i} value={step} />) : <p>No adjustments recorded</p>}</li>
-        </ol>}
+        <RecordedPath context={data.context} decision={decision} />
         <h3>Engine outcome</h3><Fields value={{ outcome: decision.outcome, detail: decision.outcome_detail, requested_size: decision.position_size, resolved_size: decision.resolved_size }} />
         <h3>Linked lots</h3>{[...rows(data.opened_lots), ...rows(data.closed_lots)].map(lot => <section key={lot.id}><Fields value={lot} />{source.kind === 'session' && <button className="btn btn-ghost" onClick={() => onSelect({ kind: 'mechanical', positionId: lot.id, reason: lot.exit_reason })}>Open lot lineage</button>}</section>)}
         <h3>Fills</h3>{rows(data.fills).map(fill => <Fields key={fill.id} value={fill} />)}
@@ -122,6 +113,28 @@ export function DecisionCard({ decision, decisionId, reason, positionId, symbol,
   </div>;
 }
 
+function GateHistory({ sessionId, onSelect }: { sessionId: string; onSelect: (selection: DecisionSelection) => void }) {
+  const [offset, setOffset] = useState(0);
+  const [since, setSince] = useState('');
+  const [until, setUntil] = useState('');
+  const invalidRange = !!since && !!until && since >= until;
+  const filters = { limit: 25, offset, since: since ? new Date(since).toISOString() : undefined, until: until ? new Date(until).toISOString() : undefined };
+  const query = useQuery({ queryKey: ['evaluationGates', sessionId, filters], queryFn: () => api.getEvaluationGates(sessionId, filters), enabled: !invalidRange, retry: false, refetchInterval: offset === 0 ? 30_000 : false });
+  return <section className="gate-history" aria-label="Evaluator gate history"><h3 className="section-title">Evaluator gate history</h3>
+    <p className="widget-note">Requested decisions and hourly quiet checkpoints. Between quiet checkpoints: not sampled.</p>
+    <details><summary>Filter gate history</summary><div className="decision-toolbar">
+      <label>Gate since<input className="input" type="datetime-local" value={since} onChange={e => { setSince(e.target.value); setOffset(0); }} /></label>
+      <label>Gate until<input className="input" type="datetime-local" value={until} onChange={e => { setUntil(e.target.value); setOffset(0); }} /></label>
+    </div></details>
+    {invalidRange ? <p role="alert">Gate since must be before until.</p> : query.isPending ? <p>Loading gate history…</p> : query.error ? <p role="alert">Gate history unavailable: {query.error.message}</p> : <>
+      {query.data?.evaluations == null ? <p>Gate history unavailable</p> : !query.data.evaluations.length ? <p>No gate events recorded. Audit may be disabled, a write may have failed, or the engine may predate these records.</p> : <div className="gate-history-strip">{rows(query.data.evaluations).map(event => <button key={event.event_id} className="gate-card" onClick={() => onSelect({ kind: 'evaluation', evaluation: event })}>
+        <time>{formatDate(event.occurred_at)}</time><strong>{event.should_decide == null ? 'Verdict unavailable' : event.should_decide ? 'Decision requested' : 'Quiet checkpoint'}</strong><span className="gate-card-reason">{event.selected_reason ?? 'Reason not recorded'}</span><span className="fill-inspect-hint">Inspect stored verdict ↗</span>
+      </button>)}</div>}
+      <div className="decision-toolbar"><button className="btn btn-ghost" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - 25))}>Newer gate events</button><span>{query.data?.total_matching ?? '—'} recorded gate events · page {offset / 25 + 1}</span><button className="btn btn-ghost" disabled={query.data?.total_matching == null || offset + 25 >= query.data.total_matching} onClick={() => setOffset(offset + 25)}>Older gate events</button></div>
+    </>}
+  </section>;
+}
+
 export function DecisionBook() {
   const context = useDecisions();
   const [tab, setTab] = useState('all');
@@ -139,7 +152,7 @@ export function DecisionBook() {
     const key = tab === 'declined' ? decision.outcome : 'All decisions';
     groups.set(key, [...(groups.get(key) ?? []), decision]);
   }
-  return <GlassCard className="decision-book"><h3 className="section-title">Strategy decisions</h3>
+  return <GlassCard className="decision-book">{context?.source.kind === 'session' && <GateHistory sessionId={context.source.sessionId} onSelect={context.select} />}<h3 className="section-title">Strategy decisions</h3><p className="widget-note">Successfully stored decisions only. Missing writes are not recoverable here; declines identify the first recorded gate.</p>
     <div className="decision-toolbar" role="tablist" aria-label="Decision book">{['all', 'declined'].map(value => <button key={value} role="tab" aria-selected={tab === value} className="btn btn-ghost" onClick={() => { setTab(value); setOffset(0); }}>{value === 'all' ? 'All decisions' : 'Not executed'}</button>)}</div>
     <details className="decision-filters"><summary>Filter decisions</summary><div className="decision-toolbar">
       <label>Symbol<input className="input" value={symbol} onChange={e => { setSymbol(e.target.value); setOffset(0); }} /></label>

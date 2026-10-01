@@ -115,7 +115,7 @@ paths:
             type: string
         - in: query
           name: category
-          description: Only events of this category (lifecycle | feed | critic | reconciliation | order | control | exchange).
+          description: Only events of this category (lifecycle | feed | critic | reconciliation | order | control | exchange | evaluation).
           schema:
             type: string
         - in: query
@@ -549,7 +549,7 @@ paths:
     get:
       tags:
         - Backtests
-      summary: One decision's full path for a run
+      summary: Recorded decision path for a run
       parameters:
         - in: path
           name: run_id
@@ -1418,15 +1418,63 @@ paths:
                 $ref: '#/components/schemas/LotLineage'
         '404':
           description: Unknown session, or no such lot in it
+  /api/oracle/{session_id}/evaluations:
+    get:
+      tags:
+        - Oracle
+      summary: Stored evaluator verdicts and quiet checkpoints
+      description: |
+        Bounded newest-first gate history. With audit enabled, the engine attempts one row per requested decision;
+        quiet cycles are sampled hourly. Full selected and concurrent trigger
+        strings remain in the stored state. A missing quiet row is not proof
+        that no drift occurred between checkpoints. Every served read is audited.
+      parameters:
+        - in: path
+          name: session_id
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: since
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: until
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 100
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: A page of stored gate verdicts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvaluationGateResponse'
+        '404':
+          description: Unknown session
   /api/oracle/{session_id}/decisions:
     get:
       tags:
         - Oracle
       summary: The session's decision records, filtered and paged
       description: |
-        Every decision the orchestrator produced, newest first, executed or not —
-        a buy the governor refused is a row with `outcome=gate_governor`, so the
-        book of what was declined is as queryable as the book of what was bought.
+        Successfully stored orchestrator decisions, newest first, executed or
+        not. A buy the governor refused is a row with `outcome=gate_governor`;
+        a failed decision-record write is logged and counted, not served here.
       parameters:
         - in: path
           name: session_id
@@ -1485,7 +1533,7 @@ paths:
     get:
       tags:
         - Oracle
-      summary: One decision's full path
+      summary: Recorded decision path
       description: |
         Inputs, verdicts, the adjustment sequence, the outcome, and the lots and
         fills that point back at this decision.
@@ -1857,6 +1905,11 @@ components:
           type: number
         drawdown_pct:
           type: number
+          description: |
+            Maximum drawdown of the current book, in percent, measured from the
+            last book rebuild or deposit (the stretch /api/evaluation measures).
+            Snapshots with unpriced holdings are skipped. A book reset or a
+            deposit is not a drawdown.
         open_positions_count:
           type: integer
           description: |
@@ -3571,7 +3624,7 @@ components:
           description: |
             `filled`, `closed_lots`, `hold`, `no_price`, `skipped_cycle_cap`, `gate_entry`,
             `gate_dual_portfolio`, `sized_to_zero`, `refused_before_rotation`, `gate_extension`,
-            `gate_governor`, `no_order`, `guard_blocked`, `not_filled`, `no_lots_to_close`,
+            `gate_governor`, `gate_market_brake`, `gate_market_down_review`, `no_order`, `guard_blocked`, `not_filled`, `no_lots_to_close`,
             `sell_bypassed_trend_up`, `sell_suppressed_protected`, `sell_not_filled`.
         outcome_detail:
           type: string
@@ -3633,11 +3686,48 @@ components:
           type: number
           nullable: true
       required: [decision_id, decided_at, symbol, action, confidence, position_size, executed, outcome]
+    EvaluationGateEvent:
+      type: object
+      description: Full persisted change-evaluator state for one recorded cycle.
+      properties:
+        event_id:
+          type: integer
+        occurred_at:
+          type: string
+          format: date-time
+        should_decide:
+          type: boolean
+        selected_reason:
+          type: string
+        state:
+          type: object
+          additionalProperties: true
+          description: Exact stored event payload, including concurrent triggers and detector facts.
+      required: [event_id, occurred_at, should_decide, selected_reason, state]
+    EvaluationGateResponse:
+      type: object
+      description: Bounded newest-first evaluator history for one live session.
+      properties:
+        session_id:
+          type: string
+        total_matching:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+        evaluations:
+          type: array
+          items:
+            $ref: '#/components/schemas/EvaluationGateEvent'
+      required: [session_id, total_matching, limit, offset, evaluations]
     DecisionDetail:
       type: object
       description: |
-        The full decision path for one decision. `context` is the typed DecisionContext
-        the orchestrator attached — every agent's inputs (`signals`), the critic's verdict
+        The recorded decision path for one decision. `evaluation` is the matching
+        stored gate verdict for a live session, or null when no event was stored.
+        `context` is the typed DecisionContext
+        the orchestrator attached — consumed signal values (`signals`), the critic's verdict
         (`critic`), the regime read (`regime`), the position manager's raw output
         (`position_manager`), the multi-timeframe read (`mtf`) and `adjustments`: the
         sequence of steps (sell_critic, critic_modulate, confidence_floor, size_scale)
@@ -3661,6 +3751,11 @@ components:
           additionalProperties:
             type: number
           description: ML-1 setup features at decision time.
+        evaluation:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/EvaluationGateEvent'
+          description: Matching live evaluator event; null when no row was stored or on backtests.
         opened_lots:
           type: array
           items:

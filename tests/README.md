@@ -15,5 +15,6 @@ needed. Screenshots default to `/private/tmp/iqar-ui-check/screenshots`.
 All `/api/**` requests are intercepted. The suite never contacts a live engine,
 including the mocked Halt action. It covers desktop/mobile selection, one chart,
 checkboxes, execution timeline, audit navigation, keyboard tabs, reader controls,
-real/paper isolation, null/partial responses, and absent new endpoints.
+real/paper isolation, null/partial responses, absent new endpoints, stored evaluator
+gate evidence, lazy traceability reads, gate pagination, and decision graph order.
 Fixtures live only in tests and are never imported by production source.

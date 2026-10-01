@@ -26,6 +26,7 @@ const held = [
   { symbol: 'BTC/USD', reason: 'below_minimum', quantity: .00000001, current_price: 63800, value: .000638, position_ids: [8] },
 ];
 const decision = { decision_id: 'decision-42', decided_at: asOf, symbol: 'BTC/USD', action: 'buy', confidence: .82, position_size: 1500, executed: true, outcome: 'filled', price: 62410, reasoning: 'Trend and risk checks passed.' };
+const gate = { event_id: 17, occurred_at: asOf, should_decide: true, selected_reason: 'Selected trigger with full persisted reason', state: { concurrent_triggers: ['Concurrent trigger with complete evidence'], cusum: { ready: false, progress: 0 }, elapsed_seconds: 0 } };
 const event = { id: 'incident-1', occurred_at: asOf, severity: 'warning', title: 'Critic unavailable — fallback active', detail: 'The configured fallback is active while the critic recovers.', order_id: 'order-42' };
 const errors = [];
 const browser = await chromium.launch({ headless: true });
@@ -52,8 +53,9 @@ async function scenario(kind = 'full', role = 'admin', route = '/live') {
     if (path.endsWith('/detail')) return json(kind === 'partial' ? { mode, open_positions: [null, { ...position, quantity: null, entry_price: null, current_price: null, unrealized_pnl_pct: null, protection: null }], recent_fills: [null, { ...fill, price: null, quantity: null, timestamp: null, execution_quality: null }], portfolio_value: null, pnl_pct: null, drawdown_pct: null, exposure_pct: null, equity_curve: null } : { mode, currency: 'USD', portfolio_value: 104280, pnl: 4280, pnl_pct: 4.28, drawdown_pct: -1.12, exposure_pct: 38, open_positions_count: 1, last_snapshot_ts: asOf, open_positions: [position], held_positions: kind === 'legacy' ? undefined : mode === 'real' && kind !== 'empty-held' ? held : [], recent_fills: kind === 'metrics' ? metricFills : [fill], equity_curve: points.map(p => ({ time: Math.floor(Date.parse(p.timestamp) / 1000), capital: p.value, roi_pct: p.index - 100 })) });
     if (path.endsWith('/curves')) return json(kind === 'partial' ? { mode, equity: null, markers: null, notes: null, btc: null, equal_weight: null } : kind === 'legacy' ? null : { mode, equity: points, btc: points.map((p, i) => ({ ...p, index: 100 + i / 60 })), equal_weight: [], exposure_matched: [], anchor: points[0].timestamp, as_of: asOf, net_of_fees: true, cash_flow_adjusted: true, markers: [{ timestamp: points[90].timestamp, symbol: 'BTC/USD', side: 'BUY', book_index: points[90].index, decision_id: 'decision-42' }] });
     if (path.includes('/orders/')) return json(kind === 'partial' ? { order_id: 'order-42', quality: null, events: null } : { order_id: 'order-42', status: 'filled', quality: fill.execution_quality, events: ['decision_created', 'risk_approved', 'submitted', 'acknowledged', 'filled'].map((stage, i) => ({ id: String(i), stage, occurred_at: asOf, detail: stage === 'filled' ? '0.024 BTC at $62,410' : null })) });
+    if (path.endsWith('/evaluations')) return json(kind === 'trace' ? { total_matching: 26, evaluations: [{ ...gate, event_id: url.searchParams.get('offset') === '25' ? 18 : 17 }] } : { total_matching: 0, evaluations: [] });
     if (path.endsWith('/decisions')) return json({ total_matching: 1, decisions: [{ ...decision, ...(kind === 'partial' ? { action: null, outcome: null, confidence: null, price: null } : {}) }] });
-    if (path.includes('/decisions/')) return json(kind === 'partial' ? { decision: null, context: null, fills: null, opened_lots: null, closed_lots: null } : { decision, context: null, fills: null, opened_lots: null, closed_lots: null });
+    if (path.includes('/decisions/')) return json(kind === 'partial' ? { decision: null, context: null, fills: null, opened_lots: null, closed_lots: null } : kind === 'trace' ? { decision, evaluation: gate, context: { regime: { label: 'trend_up' }, mtf: { trend_score: 0 }, critic: { agree: false, clamped: true }, signals: { pattern_confidence: 0, sentiment: { score: 0 }, correlation: { score: 0 }, risk: { score: 0 }, consensus: 0 }, position_manager: { proposal: 1500, kelly_info: null }, adjustments: [{ step: 'confidence_floor', fired: false, confidence_before: 0, confidence_after: 0 }] }, fills: [], opened_lots: [], closed_lots: [] } : { decision, context: null, fills: null, opened_lots: null, closed_lots: null });
     if (path.endsWith('/events')) return json(kind === 'legacy' ? null : { events: kind === 'partial' ? null : [event], next_cursor: null });
     if (path.endsWith('/fills')) return json({ fills: kind === 'partial' ? null : kind === 'metrics' ? metricFills : [fill], total_matching: kind === 'metrics' ? metricFills.length : 1 });
     if (path.endsWith('/lineage')) return json({ lot: null, fills: null });
@@ -93,7 +95,7 @@ try {
   await page.screenshot({ path: `${artifacts}/desktop.png`, fullPage: true });
   await page.getByRole('button', { name: /BTC\/USD.*inspect fill/ }).click();
   await page.getByRole('button', { name: 'Decision reasoning ↗' }).click();
-  await page.getByText('No path recorded', { exact: true }).waitFor();
+  await page.getByText('Path unavailable', { exact: true }).waitFor();
   await page.keyboard.press('Escape');
   await page.getByText('System activity', { exact: true }).click();
   assert.equal(await page.locator('.system-activity').getAttribute('open'), '');
@@ -115,6 +117,28 @@ try {
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'Mobile page overflows horizontally');
   await page.close();
   console.log('PASS desktop/mobile selection, timeline, curve toggles, audit, keyboard tabs and mocked halt');
+
+  const trace = await scenario('trace');
+  assert.ok(!trace.requests.some(r => r.path.endsWith('/evaluations')), 'Gate history must load only when the decision tab opens');
+  assert.ok(!trace.requests.some(r => r.path.includes('/decisions/')), 'Decision details must load only on selection');
+  await trace.page.getByRole('tab', { name: /Strategy decisions/ }).click();
+  await trace.page.getByRole('button', { name: /Older gate events/ }).waitFor();
+  await trace.page.locator('.gate-card').click();
+  await trace.page.getByText('Concurrent trigger with complete evidence', { exact: false }).waitFor();
+  assert.match(await trace.page.locator('dialog[open]').innerText(), /"ready": false[\s\S]*"progress": 0/);
+  await trace.page.keyboard.press('Escape');
+  await trace.page.getByRole('button', { name: 'Older gate events' }).click();
+  await trace.page.locator('.gate-card').click();
+  await trace.page.getByText('stored cycle verdict · event 18', { exact: false }).waitFor();
+  await trace.page.keyboard.press('Escape');
+  await trace.page.locator('.decision-open').click();
+  await trace.page.getByText('Early critic', { exact: true }).waitFor();
+  const stages = await trace.page.locator('dialog[open] .decision-timeline > li > details > summary').allTextContents();
+  assert.deepEqual(stages, ['Portfolio regime', 'Pattern analysis', 'Sentiment', 'Correlation', 'Risk', 'Position manager proposal', 'Execution decision']);
+  assert.match(await trace.page.locator('dialog[open]').innerText(), /Precompute and node status: unknown/);
+  assert.ok((await trace.page.locator('dialog[open]').innerText()).indexOf('Evaluator gate') < (await trace.page.locator('dialog[open]').innerText()).indexOf('Portfolio regime'));
+  await trace.page.close();
+  console.log('PASS stored gate evidence, lazy reads, older gates and graph order');
 
   for (const kind of ['null', 'partial', 'legacy']) {
     const { page } = await scenario(kind);

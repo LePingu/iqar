@@ -70,7 +70,8 @@ Incidents are events with a `dedupe_key` and no `resolved_at`: `feed_stale`,
 `exchange_unreachable`, `critic_degraded`, `unpriceable_holdings`. One row per
 condition while it lasts; `resolved_at` is set in place on recovery, so the
 same row moves from "active" to history. Plain events (no open state):
-`lifecycle` (engine started / stopped / cycle failed), `control` (`requested`
+`lifecycle` (engine started / stopped / cycle failed), `evaluation` (requested
+and hourly quiet evaluator verdicts with detector state in `after`), `control` (`requested`
 by the Tower with the operator's identity → `applied` or `failed` by the
 engine, each with `before`/`after` controls), `order` (rejected, or
 validated-not-placed on an unarmed real engine), `reconciliation` (book
@@ -171,6 +172,11 @@ Frontend polls the open Events tab every 30 seconds; fetches older pages on dema
 Each `AuditEvent` has a stable `id`; nullable `occurred_at`, `severity`
 (`info|warning|critical`), `category`, `title`, `detail`, `resolved_at`, `symbol`,
 `decision_id`, `order_id`, `position_id`, `actor`, `before`, `after`, `command_state`.
+For gate history, filter `category=evaluation`. The `after` payload keeps complete
+selected and concurrent trigger text, plus detector readiness/progress; one quiet
+checkpoint per hour is a sample, not an assertion about every intervening tick.
+The oracle also serves the bounded `/api/oracle/{s}/evaluations` history and links
+the matching gate to decision detail; see FRONTEND_AGENT_CONTEXT.md §H.
 
 Persist incidents such as feed stale/recovered, critic degraded/recovered,
 reconciliation mismatch, order rejected, deploy/restart and control changes.

@@ -110,3 +110,21 @@ test('peer reads preserve the feature-gated routes and run identity', async () =
   assert.equal(urls[2].pathname, '/api/peers/field/bull-2023-10');
   assert.equal(urls[2].searchParams.get('our_run_id'), 'run/a');
 });
+
+
+test('gate history keeps session scope, bounded paging and full stored evidence', async () => {
+  const evaluation = { event_id: 17, occurred_at: '2026-10-01T00:00:00Z', should_decide: false, selected_reason: 'Quiet checkpoint', state: { concurrent_triggers: ['full trigger text'], cusum: { ready: false, progress: 0 }, elapsed_seconds: 0 } };
+  const urls = capture({ evaluations: [evaluation], total_matching: 1 });
+  const result = await api.getEvaluationGates('live/real', { limit: 25, offset: 25, since: '2026-09-01T00:00:00Z', until: '2026-10-02T00:00:00Z' });
+  assert.equal(urls[0].pathname, '/api/oracle/live%2Freal/evaluations');
+  assert.equal(urls[0].searchParams.get('limit'), '25');
+  assert.equal(urls[0].searchParams.get('offset'), '25');
+  assert.equal(urls[0].searchParams.get('since'), '2026-09-01T00:00:00Z');
+  assert.equal(urls[0].searchParams.get('until'), '2026-10-02T00:00:00Z');
+  assert.deepEqual(result.evaluations[0], evaluation);
+});
+
+test('gate history failures remain unavailable rather than empty quiet evidence', async () => {
+  globalThis.fetch = async () => Response.json({ detail: 'Unknown session' }, { status: 404 });
+  await assert.rejects(api.getEvaluationGates('unknown'), error => error.status === 404);
+});

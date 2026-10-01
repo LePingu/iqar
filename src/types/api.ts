@@ -741,6 +741,8 @@ export type DecisionOutcome =
   | 'refused_before_rotation'
   | 'gate_extension'
   | 'gate_governor'
+  | 'gate_market_brake'
+  | 'gate_market_down_review'
   | 'no_order'
   | 'guard_blocked'
   | 'not_filled'
@@ -797,7 +799,7 @@ export interface DecisionSummary {
 
 /**
  * The typed decision context the orchestrator attached — free-form beyond the
- * known members. Null for decisions recorded before the context existed.
+ * known members. Null when no typed path was attached, including workflow failures.
  */
 export interface DecisionContext {
   regime?: Record<string, unknown> | null;
@@ -811,14 +813,32 @@ export interface DecisionContext {
 }
 
 /**
- * The full decision path for one decision. `mode` is "paper", "real" or
+ * The recorded decision path for one decision. `mode` is "paper", "real" or
  * "backtest"; on a run `trace_files` is empty.
  */
+export interface EvaluationGateEvent {
+  event_id: number;
+  occurred_at: string;
+  should_decide: boolean;
+  selected_reason: string;
+  /** Exact stored payload; detector fields are not a fixed schema. */
+  state: Record<string, unknown>;
+}
+
+export interface EvaluationGateResponse {
+  session_id: string;
+  total_matching: number;
+  limit: number;
+  offset: number;
+  evaluations: EvaluationGateEvent[];
+}
+
 export interface DecisionDetail {
   session_id: string;
   mode: string;
   decision: DecisionSummary;
   context?: DecisionContext | null;
+  evaluation?: EvaluationGateEvent | null;
   /** ML-1 setup features at decision time. */
   features?: Record<string, number> | null;
   opened_lots?: OracleLot[];
@@ -852,6 +872,7 @@ export type DecisionSource =
  * instead, headed by `exit_reason`).
  */
 export type DecisionSelection =
+  | { kind: 'evaluation'; evaluation: EvaluationGateEvent }
   | { kind: 'decision'; decisionId: string; summary?: DecisionSummary }
   | { kind: 'mechanical'; positionId?: number | null; reason?: string | null; symbol?: string }
   | { kind: 'fill'; fill: LiveFill; currency: string }
